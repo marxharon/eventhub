@@ -1,0 +1,1102 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>EventHub — Plataforma de Gestão de Eventos</title>
+
+    <!-- DaisyUI 4 + Tailwind CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@4.12.10/dist/full.min.css" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Remix Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/remixicon@4.3.0/fonts/remixicon.css" rel="stylesheet" />
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Chart.js 4 -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+
+    <!-- Vue.js 3 -->
+    <script src="https://unpkg.com/vue@3.4.38/dist/vue.global.prod.js"></script>
+
+    <!-- Estilos customizados -->
+    <link rel="stylesheet" href="/css/styles.css" />
+</head>
+<body class="bg-base-200 text-base-content min-h-screen antialiased">
+    <div id="app" class="min-h-screen flex flex-col">
+
+        <!-- ==================================================================
+             1. TELA INICIAL DE AUTENTICAÇÃO (LOGIN E CADASTRO EM TELAS SEPARADAS)
+             O menu principal só é exibido após autenticação válida.
+             ================================================================== -->
+        <div v-if="!state.isAuthenticated" class="min-h-screen flex flex-col justify-center items-center p-6 bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-900 text-base-content">
+
+            <div class="w-full max-w-md">
+                <!-- Identidade Visual EventHub -->
+                <div class="text-center mb-8 text-white">
+                    <div class="w-14 h-14 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-lg mx-auto mb-3">
+                        <i class="ri-calendar-check-fill text-3xl"></i>
+                    </div>
+                    <h1 class="text-3xl font-extrabold tracking-tight">EventHub</h1>
+                    <p class="text-sm text-indigo-200 mt-1">Plataforma Acadêmica e Profissional de Eventos</p>
+                </div>
+
+                <!-- TELA A: LOGIN -->
+                <div v-if="state.authScreen === 'login'" class="card bg-base-100 shadow-2xl border border-base-300">
+                    <div class="card-body p-8 space-y-5">
+                        <div>
+                            <h2 class="text-xl font-bold">Entrar na Plataforma</h2>
+                            <p class="text-xs text-base-content/60 mt-1">
+                                Informe seu e-mail e senha para acessar sua conta.
+                            </p>
+                        </div>
+
+                        <form @submit.prevent="submitLogin" class="space-y-4">
+                            <div class="form-control">
+                                <label class="label py-1">
+                                    <span class="label-text text-xs font-semibold">E-mail</span>
+                                </label>
+                                <div class="relative">
+                                    <i class="ri-mail-line absolute left-3.5 top-3 text-base-content/40"></i>
+                                    <input
+                                        v-model="loginForm.email"
+                                        type="email"
+                                        required
+                                        placeholder="seu.email@eventhub.com"
+                                        class="input input-bordered w-full pl-10 text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <div class="form-control">
+                                <label class="label py-1">
+                                    <span class="label-text text-xs font-semibold">Senha</span>
+                                </label>
+                                <div class="relative">
+                                    <i class="ri-lock-password-line absolute left-3.5 top-3 text-base-content/40"></i>
+                                    <input
+                                        v-model="loginForm.password"
+                                        type="password"
+                                        required
+                                        placeholder="••••••••"
+                                        class="input input-bordered w-full pl-10 text-sm"
+                                    />
+                                </div>
+                            </div>
+
+                            <button
+                                type="submit"
+                                :disabled="isSubmitting"
+                                class="btn btn-primary w-full gap-2 font-semibold"
+                            >
+                                <i class="ri-login-box-line text-lg"></i>
+                                <span>{{ isSubmitting ? 'Autenticando...' : 'Entrar' }}</span>
+                            </button>
+                        </form>
+
+                        <div class="divider text-xs text-base-content/40 my-1">Novo por aqui?</div>
+
+                        <button
+                            type="button"
+                            @click="openAuthScreen('register')"
+                            class="btn btn-outline btn-sm w-full gap-2"
+                        >
+                            <i class="ri-user-add-line"></i>
+                            Criar nova conta
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TELA B: CADASTRO DE NOVO USUÁRIO (TELA SEPARADA) -->
+                <div v-else class="card bg-base-100 shadow-2xl border border-base-300">
+                    <div class="card-body p-8 space-y-4">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <h2 class="text-xl font-bold">Criar Nova Conta</h2>
+                                <p class="text-xs text-base-content/60 mt-0.5">
+                                    Preencha seus dados para acessar o EventHub.
+                                </p>
+                            </div>
+                            <button @click="openAuthScreen('login')" class="btn btn-ghost btn-sm btn-circle" title="Voltar ao Login">
+                                <i class="ri-arrow-left-line text-lg"></i>
+                            </button>
+                        </div>
+
+                        <form @submit.prevent="submitRegister" class="space-y-3">
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs font-semibold">Nome Completo</span></label>
+                                <input
+                                    v-model="registerForm.name"
+                                    type="text"
+                                    required
+                                    placeholder="Ex.: Profa. Mariana Silva"
+                                    class="input input-bordered input-sm w-full"
+                                />
+                            </div>
+
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs font-semibold">E-mail</span></label>
+                                <input
+                                    v-model="registerForm.email"
+                                    type="email"
+                                    required
+                                    placeholder="mariana@universidade.edu.br"
+                                    class="input input-bordered input-sm w-full"
+                                />
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs font-semibold">Senha</span></label>
+                                    <input
+                                        v-model="registerForm.password"
+                                        type="password"
+                                        required
+                                        minlength="6"
+                                        placeholder="Mínimo 6 caracteres"
+                                        class="input input-bordered input-sm w-full"
+                                    />
+                                </div>
+                                <div class="form-control">
+                                    <label class="label py-1"><span class="label-text text-xs font-semibold">Perfil de Acesso</span></label>
+                                    <select v-model="registerForm.role" class="select select-bordered select-sm w-full">
+                                        <option value="PARTICIPANT">Participante</option>
+                                        <option value="ORGANIZER">Organizador</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="form-control">
+                                <label class="label py-1"><span class="label-text text-xs font-semibold">Organização / Instituição</span></label>
+                                <input
+                                    v-model="registerForm.organizationName"
+                                    type="text"
+                                    placeholder="Ex.: Universidade Federal"
+                                    class="input input-bordered input-sm w-full"
+                                />
+                            </div>
+
+                            <div class="pt-2 space-y-2">
+                                <button type="submit" :disabled="isSubmitting" class="btn btn-primary btn-sm w-full gap-2">
+                                    <i class="ri-check-line"></i>
+                                    <span>{{ isSubmitting ? 'Cadastrando...' : 'Concluir Cadastro' }}</span>
+                                </button>
+                                <button type="button" @click="openAuthScreen('login')" class="btn btn-ghost btn-sm w-full">
+                                    Já possuo uma conta
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================================================================
+             2. ÁREA AUTENTICADA DO SISTEMA (MENU LATERAL POR PERFIL + VIEWS)
+             ================================================================== -->
+        <div v-else class="flex min-h-screen">
+
+            <!-- SIDEBAR LATERAL CONTEXTUAL AO PERFIL DO USUÁRIO LOGADO -->
+            <aside :class="['bg-base-100 border-r border-base-300 flex flex-col transition-all duration-300 z-30 shadow-sm', state.sidebarCollapsed ? 'w-20' : 'w-68']">
+                <!-- Logotipo -->
+                <div class="h-16 px-4 flex items-center justify-between border-b border-base-300">
+                    <div class="flex items-center gap-3 overflow-hidden">
+                        <div class="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shrink-0">
+                            <i class="ri-calendar-check-fill text-xl"></i>
+                        </div>
+                        <div v-if="!state.sidebarCollapsed" class="leading-tight">
+                            <span class="font-extrabold text-lg tracking-tight">EventHub</span>
+                            <p class="text-xs text-base-content/60">Gestão de Eventos</p>
+                        </div>
+                    </div>
+                    <button @click="state.sidebarCollapsed = !state.sidebarCollapsed" class="btn btn-ghost btn-sm btn-square" title="Alternar Menu">
+                        <i :class="state.sidebarCollapsed ? 'ri-menu-unfold-line text-lg' : 'ri-menu-fold-line text-lg'"></i>
+                    </button>
+                </div>
+
+                <!-- Menu Dinâmico Filtrado pelo Role (PARTICIPANT vs ORGANIZER) -->
+                <nav class="flex-1 overflow-y-auto p-3 space-y-5">
+                    <div v-for="group in visibleNavigationGroups" :key="group.title">
+                        <div v-if="!state.sidebarCollapsed" class="px-3 mb-2 text-[11px] font-bold uppercase tracking-wider text-base-content/50">
+                            {{ group.title }}
+                        </div>
+                        <ul class="space-y-1">
+                            <li v-for="item in group.items" :key="item.id">
+                                <button
+                                    @click="selectView(item.id)"
+                                    :class="[
+                                        'w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all',
+                                        state.activeView === item.id
+                                            ? 'bg-indigo-600 text-white shadow-sm'
+                                            : 'hover:bg-base-200 text-base-content/80'
+                                    ]"
+                                    :title="item.label"
+                                >
+                                    <i :class="[item.icon, 'text-lg shrink-0']"></i>
+                                    <span v-if="!state.sidebarCollapsed" class="truncate">{{ item.label }}</span>
+                                </button>
+                            </li>
+                        </ul>
+                    </div>
+                </nav>
+
+                <!-- Usuário Autenticado + Botão Sair -->
+                <div class="p-3 border-t border-base-300 bg-base-100 space-y-2">
+                    <div class="flex items-center gap-3 p-2 rounded-xl bg-base-200/70">
+                        <div class="avatar placeholder">
+                            <div class="bg-indigo-600 text-white rounded-xl w-9 h-9 font-bold text-sm">
+                                <span>{{ state.currentUser.name.charAt(0) }}</span>
+                            </div>
+                        </div>
+                        <div v-if="!state.sidebarCollapsed" class="flex-1 min-w-0">
+                            <p class="text-xs font-bold truncate">{{ state.currentUser.name }}</p>
+                            <p class="text-[11px] text-base-content/60 truncate">
+                                {{ state.currentUser.role === 'ORGANIZER' ? 'Organizador' : 'Participante' }}
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        @click="logout"
+                        class="btn btn-sm btn-outline btn-error w-full gap-2"
+                        title="Encerrar Sessão"
+                    >
+                        <i class="ri-logout-box-r-line"></i>
+                        <span v-if="!state.sidebarCollapsed">Sair da Conta</span>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- CONTEÚDO PRINCIPAL -->
+            <div class="flex-1 flex flex-col min-w-0">
+
+                <!-- TOPBAR LIMPA E PROFISSIONAL -->
+                <header class="h-16 bg-base-100 border-b border-base-300 px-6 flex items-center justify-between sticky top-0 z-20">
+                    <div>
+                        <h1 class="text-lg font-bold tracking-tight">{{ activeMenuItem.label }}</h1>
+                        <p class="text-xs text-base-content/60">
+                            {{ state.currentUser.organizationName || state.currentUser.email }}
+                        </p>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                        <!-- Notificações -->
+                        <button @click="state.notificationDrawerOpen = true" class="btn btn-sm btn-ghost btn-circle indicator" title="Notificações">
+                            <span class="indicator-item badge badge-xs badge-primary">{{ state.notifications.length }}</span>
+                            <i class="ri-notification-3-line text-lg"></i>
+                        </button>
+
+                        <!-- Tema Claro / Escuro -->
+                        <button @click="toggleTheme" class="btn btn-sm btn-ghost btn-circle" title="Alternar Tema">
+                            <i :class="state.theme === 'light' ? 'ri-moon-line text-lg' : 'ri-sun-line text-lg text-amber-400'"></i>
+                        </button>
+                    </div>
+                </header>
+
+                <!-- ÁREA DE TELAS SEPARADAS -->
+                <main class="flex-1 p-6 max-w-6xl w-full mx-auto space-y-6">
+
+                    <!-- ======================================================
+                         TELA 1 (ORGANIZADOR): LISTAGEM DE MEUS EVENTOS
+                         ====================================================== -->
+                    <section v-if="state.activeView === 'events-list'" class="space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <div>
+                                <h2 class="text-xl font-bold">Eventos Cadastrados</h2>
+                                <p class="text-xs text-base-content/60 mt-0.5">
+                                    Gerencie a publicação dos seus eventos e acesse a programação de atividades de cada um.
+                                </p>
+                            </div>
+                            <div class="flex gap-2">
+                                <button @click="loadOrganizerEvents" class="btn btn-sm btn-ghost gap-1.5">
+                                    <i class="ri-refresh-line"></i> Atualizar
+                                </button>
+                                <button @click="openNewEventScreen" class="btn btn-sm btn-primary gap-1.5">
+                                    <i class="ri-add-line text-base"></i> Novo Evento
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div
+                                v-for="ev in organizerEvents"
+                                :key="ev.id"
+                                class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-all"
+                            >
+                                <div class="card-body p-6 flex flex-col justify-between gap-4">
+                                    <div class="space-y-2">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span :class="[
+                                                'badge badge-sm font-semibold',
+                                                ev.status === 'PUBLISHED' ? 'badge-success text-white' : (ev.status === 'DRAFT' ? 'badge-warning' : 'badge-error text-white')
+                                            ]">
+                                                {{ ev.status === 'PUBLISHED' ? 'Publicado' : (ev.status === 'DRAFT' ? 'Rascunho' : 'Cancelado') }}
+                                            </span>
+                                            <span class="text-xs text-base-content/50 font-mono">
+                                                {{ (ev.activities || []).length }} atividade(s)
+                                            </span>
+                                        </div>
+
+                                        <h3 class="text-lg font-bold leading-snug">{{ ev.title }}</h3>
+                                        <p class="text-xs text-base-content/70 line-clamp-2">{{ ev.description }}</p>
+
+                                        <div class="pt-2 space-y-1 text-xs text-base-content/60">
+                                            <div><i class="ri-building-line mr-1"></i> {{ ev.organization }}</div>
+                                            <div><i class="ri-calendar-line mr-1"></i> {{ ev.startDate }} até {{ ev.endDate }}</div>
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-4 border-t border-base-300 flex flex-wrap items-center justify-between gap-2">
+                                        <div class="flex gap-1.5">
+                                            <button @click="openEventProgramScreen(ev)" class="btn btn-xs btn-primary gap-1">
+                                                <i class="ri-list-check-2"></i> Ver Programação
+                                            </button>
+                                            <button @click="openNewActivityForEvent(ev)" class="btn btn-xs btn-outline gap-1">
+                                                <i class="ri-add-line"></i> Nova Atividade
+                                            </button>
+                                        </div>
+
+                                        <div class="flex gap-1.5">
+                                            <button @click="openEditEventScreen(ev)" class="btn btn-xs btn-ghost" title="Editar Evento">
+                                                <i class="ri-edit-line"></i>
+                                            </button>
+                                            <button
+                                                v-if="ev.status === 'DRAFT'"
+                                                @click="changeEventStatus(ev.id, 'publish')"
+                                                class="btn btn-xs btn-success text-white"
+                                            >
+                                                Publicar
+                                            </button>
+                                            <button
+                                                v-if="ev.status !== 'CANCELLED'"
+                                                @click="changeEventStatus(ev.id, 'cancel')"
+                                                class="btn btn-xs btn-outline btn-error"
+                                            >
+                                                Cancelar
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 2 (ORGANIZADOR): NOVO EVENTO / EDITAR EVENTO
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'event-form'" class="max-w-2xl mx-auto">
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-5">
+                                <div class="flex items-center justify-between border-b border-base-300 pb-4">
+                                    <div>
+                                        <h2 class="text-xl font-bold">
+                                            {{ editingEventId ? 'Editar Evento' : 'Cadastrar Novo Evento' }}
+                                        </h2>
+                                        <p class="text-xs text-base-content/60 mt-0.5">
+                                            Defina as informações públicas, organização responsável e período de realização.
+                                        </p>
+                                    </div>
+                                    <button @click="selectView('events-list')" class="btn btn-sm btn-ghost gap-1">
+                                        <i class="ri-arrow-left-line"></i> Voltar
+                                    </button>
+                                </div>
+
+                                <form @submit.prevent="submitEventForm" class="space-y-4">
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Título do Evento</span></label>
+                                        <input
+                                            v-model="eventForm.title"
+                                            type="text"
+                                            required
+                                            placeholder="Ex.: Congresso Nacional de Computação 2026"
+                                            class="input input-bordered input-sm w-full"
+                                        />
+                                    </div>
+
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Organização Responsável</span></label>
+                                        <input
+                                            v-model="eventForm.organization"
+                                            type="text"
+                                            required
+                                            placeholder="Ex.: SBC - Sociedade Brasileira de Computação"
+                                            class="input input-bordered input-sm w-full"
+                                        />
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Data e Hora de Início</span></label>
+                                            <input
+                                                v-model="eventForm.startDate"
+                                                type="datetime-local"
+                                                step="1"
+                                                required
+                                                class="input input-bordered input-sm w-full"
+                                            />
+                                        </div>
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Data e Hora de Término</span></label>
+                                            <input
+                                                v-model="eventForm.endDate"
+                                                type="datetime-local"
+                                                step="1"
+                                                required
+                                                class="input input-bordered input-sm w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Descrição Pública</span></label>
+                                        <textarea
+                                            v-model="eventForm.description"
+                                            rows="3"
+                                            placeholder="Apresente os objetivos e informações gerais para os participantes..."
+                                            class="textarea textarea-bordered textarea-sm w-full"
+                                        ></textarea>
+                                    </div>
+
+                                    <div class="flex justify-end gap-2 pt-2">
+                                        <button type="button" @click="selectView('events-list')" class="btn btn-sm btn-ghost">
+                                            Cancelar
+                                        </button>
+                                        <button type="submit" class="btn btn-sm btn-primary gap-1.5">
+                                            <i class="ri-save-line"></i>
+                                            {{ editingEventId ? 'Salvar Alterações' : 'Criar Evento' }}
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 3 (ORGANIZADOR): PROGRAMAÇÃO DE UM EVENTO ESPECÍFICO
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'event-program' && selectedEvent" class="space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <div>
+                                <div class="flex items-center gap-2">
+                                    <button @click="selectView('events-list')" class="btn btn-xs btn-ghost gap-1">
+                                        <i class="ri-arrow-left-line"></i> Eventos
+                                    </button>
+                                    <span class="text-xs text-base-content/40">/</span>
+                                    <span class="text-xs font-semibold text-indigo-600">{{ selectedEvent.organization }}</span>
+                                </div>
+                                <h2 class="text-xl font-bold mt-1">{{ selectedEvent.title }}</h2>
+                            </div>
+                            <button @click="openNewActivityForEvent(selectedEvent)" class="btn btn-sm btn-primary gap-1.5">
+                                <i class="ri-add-line"></i> Adicionar Atividade
+                            </button>
+                        </div>
+
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6">
+                                <h3 class="font-bold text-base mb-4">Atividades da Programação</h3>
+
+                                <div class="overflow-x-auto">
+                                    <table class="table table-sm w-full">
+                                        <thead>
+                                            <tr class="text-base-content/60">
+                                                <th>Atividade</th>
+                                                <th>Palestrante / Local</th>
+                                                <th>Horário</th>
+                                                <th>Valor</th>
+                                                <th>Ocupação</th>
+                                                <th>Lista de Espera</th>
+                                                <th>Situação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="act in selectedEvent.activities" :key="act.id" class="hover">
+                                                <td>
+                                                    <div class="font-bold text-sm">{{ act.title }}</div>
+                                                    <div class="text-xs text-base-content/60">{{ act.description }}</div>
+                                                </td>
+                                                <td>
+                                                    <div class="text-xs font-semibold">{{ act.speaker }}</div>
+                                                    <div class="text-xs text-base-content/60">{{ act.location }}</div>
+                                                </td>
+                                                <td class="text-xs font-mono">
+                                                    <div>{{ act.startTime }}</div>
+                                                    <div class="text-base-content/50">até {{ act.endTime }}</div>
+                                                </td>
+                                                <td>
+                                                    <span :class="['badge badge-sm font-semibold', act.paid ? 'badge-secondary' : 'badge-accent']">
+                                                        {{ act.paid ? 'R$ ' + Number(act.price).toFixed(2) : 'Gratuita' }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <div class="flex items-center gap-2">
+                                                        <progress class="progress progress-primary w-16" :value="act.occupiedSlots" :max="act.capacity"></progress>
+                                                        <span class="font-mono text-xs font-bold">{{ act.occupiedSlots }}/{{ act.capacity }}</span>
+                                                    </div>
+                                                </td>
+                                                <td>
+                                                    <span :class="['badge badge-xs', act.waitlistEnabled ? 'badge-info text-white' : 'badge-ghost']">
+                                                        {{ act.waitlistEnabled ? 'Ativa' : 'Inativa' }}
+                                                    </span>
+                                                </td>
+                                                <td>
+                                                    <span v-if="act.completed" class="badge badge-xs badge-success text-white gap-1">
+                                                        <i class="ri-check-double-line"></i> Concluída
+                                                    </span>
+                                                    <button
+                                                        v-else
+                                                        @click="markActivityCompleted(act.id)"
+                                                        class="btn btn-xs btn-outline btn-success"
+                                                    >
+                                                        Marcar Concluída
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                            <tr v-if="!selectedEvent.activities || selectedEvent.activities.length === 0">
+                                                <td colspan="7" class="text-center py-8 text-sm text-base-content/50">
+                                                    Nenhuma atividade cadastrada neste evento. Clique em "Adicionar Atividade" para iniciar a programação.
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 4 (ORGANIZADOR): CADASTRAR NOVA ATIVIDADE DO EVENTO
+                         Acessível exclusivamente a partir de um Evento selecionado
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'activity-form' && selectedEvent" class="max-w-2xl mx-auto">
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-5">
+                                <div class="flex items-center justify-between border-b border-base-300 pb-4">
+                                    <div>
+                                        <p class="text-xs font-semibold text-indigo-600">{{ selectedEvent.title }}</p>
+                                        <h2 class="text-xl font-bold mt-0.5">Nova Atividade da Programação</h2>
+                                        <p class="text-xs text-base-content/60 mt-0.5">
+                                            Cadastre palestra, minicurso ou workshop definindo horário, local e regras de inscrição.
+                                        </p>
+                                    </div>
+                                    <button @click="openEventProgramScreen(selectedEvent)" class="btn btn-sm btn-ghost gap-1">
+                                        <i class="ri-arrow-left-line"></i> Voltar à Programação
+                                    </button>
+                                </div>
+
+                                <form @submit.prevent="submitActivityForm" class="space-y-4">
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Evento Vinculado</span></label>
+                                        <input
+                                            type="text"
+                                            :value="selectedEvent.title"
+                                            disabled
+                                            class="input input-bordered input-sm w-full bg-base-200 font-semibold"
+                                        />
+                                    </div>
+
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Título da Atividade</span></label>
+                                        <input
+                                            v-model="activityForm.title"
+                                            type="text"
+                                            required
+                                            placeholder="Ex.: Workshop de Arquitetura de Microsserviços"
+                                            class="input input-bordered input-sm w-full"
+                                        />
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Palestrante / Responsável</span></label>
+                                            <input
+                                                v-model="activityForm.speaker"
+                                                type="text"
+                                                required
+                                                placeholder="Ex.: Dra. Helena Costa"
+                                                class="input input-bordered input-sm w-full"
+                                            />
+                                        </div>
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Local / Sala</span></label>
+                                            <input
+                                                v-model="activityForm.location"
+                                                type="text"
+                                                required
+                                                placeholder="Ex.: Auditório Principal"
+                                                class="input input-bordered input-sm w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Horário de Início</span></label>
+                                            <input
+                                                v-model="activityForm.startTime"
+                                                type="datetime-local"
+                                                step="1"
+                                                required
+                                                class="input input-bordered input-sm w-full"
+                                            />
+                                        </div>
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Horário de Término</span></label>
+                                            <input
+                                                v-model="activityForm.endTime"
+                                                type="datetime-local"
+                                                step="1"
+                                                required
+                                                class="input input-bordered input-sm w-full"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 items-end">
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Limite de Vagas</span></label>
+                                            <input
+                                                v-model.number="activityForm.capacity"
+                                                type="number"
+                                                min="1"
+                                                required
+                                                class="input input-bordered input-sm w-full font-mono"
+                                            />
+                                        </div>
+                                        <div class="form-control">
+                                            <label class="label py-1"><span class="label-text text-xs font-semibold">Valor de Inscrição (R$)</span></label>
+                                            <input
+                                                v-model.number="activityForm.price"
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                required
+                                                class="input input-bordered input-sm w-full font-mono"
+                                            />
+                                        </div>
+                                        <div class="form-control pb-1">
+                                            <label class="label cursor-pointer justify-start gap-2">
+                                                <input v-model="activityForm.waitlistEnabled" type="checkbox" class="toggle toggle-sm toggle-primary" />
+                                                <span class="label-text text-xs font-semibold">Permitir Lista de Espera</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Descrição da Atividade</span></label>
+                                        <textarea
+                                            v-model="activityForm.description"
+                                            rows="2"
+                                            placeholder="Ementa ou detalhes da atividade..."
+                                            class="textarea textarea-bordered textarea-sm w-full"
+                                        ></textarea>
+                                    </div>
+
+                                    <div class="flex justify-end gap-2 pt-2">
+                                        <button type="button" @click="openEventProgramScreen(selectedEvent)" class="btn btn-sm btn-ghost">
+                                            Cancelar
+                                        </button>
+                                        <button type="submit" class="btn btn-sm btn-primary gap-1.5">
+                                            <i class="ri-check-line"></i> Cadastrar Atividade
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 5: MEU PERFIL (EDIÇÃO LIMPA DO PRÓPRIO USUÁRIO)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'user-profile'" class="max-w-xl mx-auto">
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-5">
+                                <div>
+                                    <h2 class="text-xl font-bold">Meus Dados de Perfil</h2>
+                                    <p class="text-xs text-base-content/60 mt-0.5">
+                                        Mantenha suas informações pessoais e institucionais atualizadas.
+                                    </p>
+                                </div>
+
+                                <form @submit.prevent="submitUpdateProfile" class="space-y-4">
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">E-mail de Acesso</span></label>
+                                        <input type="email" :value="state.currentUser.email" disabled class="input input-sm input-bordered bg-base-200" />
+                                    </div>
+
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Perfil na Plataforma</span></label>
+                                        <input
+                                            type="text"
+                                            :value="state.currentUser.role === 'ORGANIZER' ? 'Organizador' : 'Participante'"
+                                            disabled
+                                            class="input input-sm input-bordered bg-base-200"
+                                        />
+                                    </div>
+
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Nome Completo</span></label>
+                                        <input v-model="profileForm.name" type="text" required class="input input-sm input-bordered" />
+                                    </div>
+
+                                    <div class="form-control">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Organização / Instituição</span></label>
+                                        <input v-model="profileForm.organizationName" type="text" class="input input-sm input-bordered" />
+                                    </div>
+
+                                    <div class="pt-2">
+                                        <button type="submit" class="btn btn-sm btn-primary gap-2">
+                                            <i class="ri-save-line"></i> Salvar Alterações
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 6: VALIDADORES DO SISTEMA (EM MENU E TELA PRÓPRIA)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'system-validators'" class="space-y-6">
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-4">
+                                <div>
+                                    <h2 class="text-lg font-bold flex items-center gap-2">
+                                        <i class="ri-shield-keyhole-line text-indigo-600"></i>
+                                        Validador de Isolamento e Permissão de Acesso entre Usuários
+                                    </h2>
+                                    <p class="text-xs text-base-content/60 mt-0.5">
+                                        Verifique na prática como o sistema protege os dados pessoais de cada participante autenticado.
+                                    </p>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <button
+                                        v-for="acc in demoAccounts"
+                                        :key="'val-' + acc.id"
+                                        @click="testAccessControlValidator(acc.id)"
+                                        class="btn btn-sm btn-outline gap-2"
+                                    >
+                                        <i class="ri-user-search-line"></i>
+                                        <span>Consultar Perfil de {{ acc.name }} (ID #{{ acc.id }})</span>
+                                    </button>
+                                </div>
+
+                                <div
+                                    v-if="accessValidatorResult"
+                                    :class="[
+                                        'p-4 rounded-xl border text-xs space-y-2',
+                                        accessValidatorResult.ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30'
+                                    ]"
+                                >
+                                    <div class="flex items-center justify-between font-bold text-sm">
+                                        <span>
+                                            Resultado: HTTP {{ accessValidatorResult.httpStatus }} —
+                                            {{ accessValidatorResult.ok ? 'Acesso Autorizado' : 'Acesso Bloqueado pelo Serviço de Usuários' }}
+                                        </span>
+                                        <span class="font-mono text-xs">{{ accessValidatorResult.latencyMs }}ms</span>
+                                    </div>
+                                    <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono bg-base-200/70 p-3 rounded-lg">{{ JSON.stringify(accessValidatorResult.payload, null, 2) }}</pre>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-2">
+                                <h3 class="text-base font-bold flex items-center gap-2">
+                                    <i class="ri-flashlight-line text-amber-500"></i>
+                                    Simuladores de Concorrência de Vagas e Tolerância a Falhas
+                                </h3>
+                                <p class="text-xs text-base-content/60">
+                                    Os simuladores interativos de disputa simultânea de vagas e falha do serviço de notificações serão habilitados nesta tela assim que os microsserviços de Notificação, Pagamento e Inscrição forem ativados nos próximos passos.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 7: STATUS DOS SERVIÇOS E INFRAESTRUTURA
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'architecture-status'" class="space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <div>
+                                <h2 class="text-xl font-bold">Monitor de Serviços da Plataforma</h2>
+                                <p class="text-xs text-base-content/60 mt-0.5">
+                                    Verificação de disponibilidade em tempo real através do API Gateway ({{ onlineServicesCount }} de 6 serviços ativos).
+                                </p>
+                            </div>
+                            <button @click="checkAllHealth" class="btn btn-sm btn-primary gap-2" :disabled="isCheckingHealth">
+                                <i :class="['ri-refresh-line', isCheckingHealth ? 'animate-spin' : '']"></i>
+                                Atualizar Status
+                            </button>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <div
+                                v-for="svc in state.microservices"
+                                :key="svc.id"
+                                class="card bg-base-100 border border-base-300 shadow-sm"
+                            >
+                                <div class="card-body p-5 space-y-3">
+                                    <div class="flex items-center justify-between">
+                                        <span class="badge badge-sm font-mono badge-ghost">Porta :{{ svc.port }}</span>
+                                        <span :class="['badge badge-sm font-semibold text-white', svc.online ? 'badge-success' : 'badge-warning']">
+                                            {{ svc.online ? 'Ativo (' + svc.latencyMs + 'ms)' : 'Offline' }}
+                                        </span>
+                                    </div>
+                                    <div>
+                                        <h3 class="font-bold text-sm">{{ svc.name }}</h3>
+                                        <p class="text-xs text-base-content/60 mt-0.5">{{ svc.stack }}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 8 (PARTICIPANTE): EXPLORAR EVENTOS E BUSCA (PASSO 5)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'explore-events'" class="space-y-6">
+                        <!-- Barra de Busca e Filtros -->
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-5">
+                                <form @submit.prevent="searchPublishedCatalog" class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
+                                    <div class="form-control md:col-span-5">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Buscar Evento ou Organização</span></label>
+                                        <div class="relative">
+                                            <i class="ri-search-line absolute left-3 top-2.5 text-base-content/40"></i>
+                                            <input
+                                                v-model="searchFilters.keyword"
+                                                type="text"
+                                                placeholder="Ex.: Congresso, Arquitetura, IA..."
+                                                class="input input-bordered input-sm w-full pl-9"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="form-control md:col-span-3">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Modalidade de Inscrição</span></label>
+                                        <select v-model="searchFilters.priceFilter" @change="searchPublishedCatalog" class="select select-bordered select-sm w-full">
+                                            <option value="ALL">Todas as atividades</option>
+                                            <option value="FREE">Apenas gratuitas</option>
+                                            <option value="PAID">Apenas pagas</option>
+                                        </select>
+                                    </div>
+
+                                    <div class="form-control md:col-span-2 pb-1">
+                                        <label class="label cursor-pointer justify-start gap-2 py-0">
+                                            <input
+                                                v-model="searchFilters.onlyAvailable"
+                                                @change="searchPublishedCatalog"
+                                                type="checkbox"
+                                                class="toggle toggle-sm toggle-primary"
+                                            />
+                                            <span class="label-text text-xs font-semibold">Com vagas</span>
+                                        </label>
+                                    </div>
+
+                                    <div class="md:col-span-2 flex gap-1.5">
+                                        <button type="submit" class="btn btn-sm btn-primary flex-1 gap-1" :disabled="isSearchingCatalog">
+                                            <i class="ri-search-line"></i> Buscar
+                                        </button>
+                                        <button type="button" @click="clearSearchFilters" class="btn btn-sm btn-ghost btn-square" title="Limpar Filtros">
+                                            <i class="ri-filter-off-line"></i>
+                                        </button>
+                                    </div>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Vitrine de Eventos Publicados -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                            <div
+                                v-for="ev in publishedEventsCatalog"
+                                :key="'pub-' + ev.id"
+                                class="card bg-base-100 border border-base-300 shadow-sm hover:shadow-md transition-all"
+                            >
+                                <div class="card-body p-6 flex flex-col justify-between gap-4">
+                                    <div class="space-y-2.5">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span class="badge badge-sm badge-primary badge-outline font-semibold">
+                                                {{ ev.organization }}
+                                            </span>
+                                            <span class="badge badge-sm badge-ghost font-mono">
+                                                {{ (ev.activities || []).length }} atividade(s)
+                                            </span>
+                                        </div>
+
+                                        <h3 class="text-lg font-extrabold leading-snug">{{ ev.title }}</h3>
+                                        <p class="text-xs text-base-content/70 line-clamp-2">{{ ev.description }}</p>
+
+                                        <div class="pt-1 text-xs text-base-content/60 flex items-center gap-2">
+                                            <i class="ri-calendar-event-line text-indigo-600"></i>
+                                            <span>{{ ev.startDate }} até {{ ev.endDate }}</span>
+                                        </div>
+
+                                        <!-- Resumo das atividades filtradas pela modalidade selecionada -->
+                                        <div class="pt-2 space-y-1.5">
+                                            <div
+                                                v-for="act in ev.activities"
+                                                :key="'preview-act-' + act.id"
+                                                class="flex items-center justify-between gap-2 p-2 rounded-lg bg-base-200/70 text-xs"
+                                            >
+                                                <span class="font-medium truncate">{{ act.title }}</span>
+                                                <div class="flex items-center gap-1.5 shrink-0">
+                                                    <span :class="['badge badge-xs font-semibold', act.paid ? 'badge-secondary' : 'badge-accent']">
+                                                        {{ act.paid ? 'R$ ' + Number(act.price).toFixed(2) : 'Gratuita' }}
+                                                    </span>
+                                                    <span class="badge badge-xs badge-ghost font-mono">
+                                                        {{ act.availableSlots }}/{{ act.capacity }} vagas
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="pt-4 border-t border-base-300 flex items-center justify-between">
+                                        <div class="text-xs text-base-content/60">
+                                            Consulte horários, locais e vagas disponíveis
+                                        </div>
+                                        <button
+                                            @click="openParticipantEventDetails(ev)"
+                                            class="btn btn-sm btn-primary gap-1.5"
+                                        >
+                                            <span>Ver Programação</span>
+                                            <i class="ri-arrow-right-line"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div
+                                v-if="!isSearchingCatalog && publishedEventsCatalog.length === 0"
+                                class="md:col-span-2 card bg-base-100 border border-base-300 shadow-sm"
+                            >
+                                <div class="card-body p-10 text-center text-base-content/60">
+                                    <i class="ri-Calendar-close-line text-3xl mb-2"></i>
+                                    <p class="text-sm font-semibold">Nenhum evento publicado encontrado para os filtros informados.</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 9 (PARTICIPANTE): DETALHES DA PROGRAMAÇÃO E VAGAS DO EVENTO
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'participant-event-details' && selectedCatalogEvent" class="space-y-6">
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <button @click="selectView('explore-events')" class="btn btn-xs btn-ghost gap-1">
+                                        <i class="ri-arrow-left-line"></i> Voltar para Eventos
+                                    </button>
+                                    <span class="badge badge-sm badge-primary badge-outline font-semibold">
+                                        {{ selectedCatalogEvent.organization }}
+                                    </span>
+                                </div>
+                                <h2 class="text-2xl font-extrabold">{{ selectedCatalogEvent.title }}</h2>
+                                <p class="text-xs text-base-content/70">{{ selectedCatalogEvent.description }}</p>
+                                <div class="text-xs text-base-content/60 pt-1">
+                                    <i class="ri-time-line mr-1"></i> Período: {{ selectedCatalogEvent.startDate }} a {{ selectedCatalogEvent.endDate }}
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Cards de Atividades da Programação e Saldo de Vagas -->
+                        <div class="space-y-3">
+                            <h3 class="text-base font-bold px-1">Programação de Atividades e Disponibilidade</h3>
+
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div
+                                    v-for="act in selectedCatalogEvent.activities"
+                                    :key="'cat-act-' + act.id"
+                                    class="card bg-base-100 border border-base-300 shadow-sm"
+                                >
+                                    <div class="card-body p-5 flex flex-col justify-between gap-4">
+                                        <div class="space-y-2">
+                                            <div class="flex items-center justify-between gap-2">
+                                                <span :class="['badge badge-sm font-semibold', act.paid ? 'badge-secondary' : 'badge-accent']">
+                                                    {{ act.paid ? 'R$ ' + Number(act.price).toFixed(2) : 'Gratuita' }}
+                                                </span>
+                                                <span
+                                                    :class="[
+                                                        'badge badge-xs font-semibold',
+                                                        act.availableSlots > 0 ? 'badge-success text-white' : (act.waitlistEnabled ? 'badge-info text-white' : 'badge-error text-white')
+                                                    ]"
+                                                >
+                                                    {{ act.availableSlots > 0 ? act.availableSlots + ' vaga(s) disponível(is)' : (act.waitlistEnabled ? 'Lista de Espera Aberta' : 'Esgotada') }}
+                                                </span>
+                                            </div>
+
+                                            <h4 class="font-bold text-base">{{ act.title }}</h4>
+                                            <p class="text-xs text-base-content/70">{{ act.description }}</p>
+
+                                            <div class="pt-2 space-y-1 text-xs text-base-content/60">
+                                                <div><i class="ri-user-voice-line mr-1.5 text-indigo-600"></i> <strong>Palestrante:</strong> {{ act.speaker }}</div>
+                                                <div><i class="ri-map-pin-line mr-1.5 text-indigo-600"></i> <strong>Local:</strong> {{ act.location }}</div>
+                                                <div><i class="ri-calendar-schedule-line mr-1.5 text-indigo-600"></i> <strong>Horário:</strong> {{ act.startTime }} até {{ act.endTime }}</div>
+                                            </div>
+                                        </div>
+
+                                        <div class="pt-3 border-t border-base-300 space-y-2">
+                                            <div class="flex items-center justify-between text-xs">
+                                                <span class="text-base-content/60">Ocupação da Atividade</span>
+                                                <span class="font-mono font-bold">{{ act.occupiedSlots }} / {{ act.capacity }} vagas</span>
+                                            </div>
+                                            <progress
+                                                :class="['progress w-full', act.availableSlots > 0 ? 'progress-primary' : 'progress-warning']"
+                                                :value="act.occupiedSlots"
+                                                :max="act.capacity"
+                                            ></progress>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         DEMAIS TELAS (ATIVADAS NOS PASSOS 6 A 9)
+                         ====================================================== -->
+                    <section v-else class="card bg-base-100 border border-base-300 shadow-sm">
+                        <div class="card-body p-10 text-center space-y-3">
+                            <div class="w-14 h-14 rounded-2xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center mx-auto text-2xl">
+                                <i :class="activeMenuItem.icon || 'ri-compass-3-line'"></i>
+                            </div>
+                            <h2 class="text-lg font-bold">{{ activeMenuItem.label }}</h2>
+                            <p class="text-xs text-base-content/60 max-w-md mx-auto">
+                                Este módulo será conectado ao respectivo microsserviço nos próximos passos da implementação.
+                            </p>
+                        </div>
+                    </section>
+
+                </main>
+            </div>
+        </div>
+
+        <!-- DRAWER LATERAL DE NOTIFICAÇÕES -->
+        <div v-if="state.notificationDrawerOpen" class="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs">
+            <div class="w-full max-w-md bg-base-100 h-full shadow-2xl border-l border-base-300 flex flex-col">
+                <div class="p-4 border-b border-base-300 flex items-center justify-between">
+                    <div class="flex items-center gap-2">
+                        <i class="ri-notification-badge-line text-indigo-600 text-xl"></i>
+                        <h3 class="font-bold text-base">Notificações</h3>
+                    </div>
+                    <button @click="state.notificationDrawerOpen = false" class="btn btn-sm btn-ghost btn-circle">
+                        <i class="ri-close-line text-lg"></i>
+                    </button>
+                </div>
+                <div class="flex-1 p-6 overflow-y-auto flex flex-col items-center justify-center text-center text-base-content/60">
+                    <i class="ri-mail-check-line text-4xl mb-2 text-indigo-500"></i>
+                    <p class="text-sm font-medium">Sua caixa de notificações está vazia.</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script src="/js/api.js?v=7"></script>
+    <script src="/js/store.js?v=7"></script>
+    <script src="/js/app.js?v=7"></script>
+</body>
+</html>

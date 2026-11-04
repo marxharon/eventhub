@@ -58,7 +58,7 @@ O diagrama de containers detalha a topologia de execução em containers Docker,
 ```mermaid
 flowchart TD
     subgraph Clientes ["Camada de Apresentação (Navegador)"]
-        SPA["💻 Web App SPA\n(HTML5, Bootstrap 5, JS Vanilla)\nInterfaces de Participante e Organizador"]
+        SPA["💻 Web App SPA Moderna\n(Vue.js 3, Tailwind CSS, DaisyUI, Chart.js)\nDashboard c/ Sidebar para Participante e Organizador"]
     end
 
     subgraph Borda ["Camada de Borda (Container Docker :8080)"]

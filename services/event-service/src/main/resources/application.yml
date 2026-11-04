@@ -1,0 +1,22 @@
+server:
+  port: 8082
+
+spring:
+  application:
+    name: event-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:5432/${POSTGRES_DB:eventhub_db}
+    username: ${POSTGRES_USER:eventhub}
+    password: ${POSTGRES_PASSWORD:eventhub_secret_2026}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+eventhub:
+  jwt:
+    secret: ${JWT_SECRET:EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}

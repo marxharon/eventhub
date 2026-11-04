@@ -16,7 +16,7 @@ Conforme definido em [Microsservicos.txt](Microsservicos.txt), o sistema é comp
 | 4 | **Serviço de Inscrição** | `services/registration-service` | Java 21 + Spring Boot 3 | `8084` | **RF05, RF06, RF09, RF11, RN01–RN05, RQ04**: Solicitação, consulta e cancelamento de inscrições; controle estrito de limite de vagas sob concorrência; lista de espera automática; prevenção de registros duplicados; indicadores gerenciais para organizadores. |
 | 5 | **Serviço de Pagamento** | `services/payment-service` | Python 3.12 + FastAPI | `8085` | **RF07, RN02, RN03**: Inicialização de pagamento via provedor simulado e registro de confirmação (`APPROVED`), recusa (`REFUSED`) ou expiração (`EXPIRED`). |
 | 6 | **Serviço de Notificação** | `services/notification-service` | Python 3.12 + FastAPI | `8086` | **RF08, RN05, RQ03**: Comunicação de inscrição, confirmação, cancelamento, pagamento e lista de espera; simulação de indisponibilidade sem bloquear operações críticas. |
-| — | **API Gateway + Web App** | `gateway/` e `web-app/` | Nginx + HTML5/JS/Bootstrap | `8080` (Host) | Ponto único de entrada HTTP, roteamento reverso para os 6 microsserviços e entrega da aplicação Web SPA para participantes e organizadores. |
+| — | **API Gateway + Web App** | `gateway/` e `web-app/` | Nginx + **Vue.js 3 + Tailwind CSS (DaisyUI) + Chart.js + SweetAlert2 + Lucide Icons** | `8080` (Host) | Ponto único de entrada HTTP, roteamento reverso para os 6 microsserviços e entrega da aplicação Web SPA moderna, responsiva e orientada a perfis (`PARTICIPANT` e `ORGANIZER`). |
 
 ---
 
@@ -102,16 +102,19 @@ trabalho_microsservicos/
 │   │   └── init.sql                        # Criação de tabelas e dados iniciais (seed)
 │   └── gateway/
 │       └── nginx.conf                      # Configuração do API Gateway e servidor Web
-├── web-app/
-│   ├── index.html                          # Interface Web (SPA em HTML5 + Bootstrap 5)
+├── web-app/                                # [SPA Moderna: Vue.js 3 + Tailwind CSS + DaisyUI + Chart.js]
+│   ├── index.html                          # Shell principal da aplicação (Sidebar, Topbar e Views reativas)
 │   ├── css/
-│   │   └── styles.css
+│   │   └── styles.css                      # Customizações visuais (Glassmorphism, animações e impressão de certificado)
 │   └── js/
-│       ├── api.js                          # Cliente HTTP unificado e gestão de JWT
-│       └── app.js                          # Lógica de telas (Login, Busca, Inscrição, Check-in, Relatórios)
-├── scripts/
-│   ├── test_concurrency.py                 # Script de validação de concorrência (RN01)
-│   └── test_fault_tolerance.py             # Script de validação de falha de notificação/pagamento (RN03/RN05)
+│       ├── api.js                          # Cliente HTTP unificado, interceptors JWT e tratamento de erros
+│       ├── store.js                        # Estado global reativo (usuário logado, notificações, status dos serviços)
+│       ├── lab-runner.js                   # Motor Web de testes de Concorrência (RN01) e Tolerância a Falhas (RN03/RN05)
+│       ├── components/                     # Componentes visuais reutilizáveis (Modais, KPI Cards, Badges, Toast)
+│       └── app.js                          # Controlador principal Vue 3 com roteamento de telas por perfil
+├── scripts/                                # Scripts opcionais CLI (espelham o motor visual integrado na Web App)
+│   ├── test_concurrency.py                 # Script CLI de validação de concorrência (RN01)
+│   └── test_fault_tolerance.py             # Script CLI de validação de falha de notificação/pagamento (RN03/RN05)
 └── services/
     ├── user-service/                       # [Java 21 / Spring Boot 3] (RF01, RN07)
     │   ├── Dockerfile
@@ -195,6 +198,36 @@ trabalho_microsservicos/
             └── schemas/                    # notification_schema.py
 ```
 
+### 3.1. Arquitetura Visual, Frameworks Front-End e Experiência do Usuário (UI/UX)
+
+Para proporcionar uma interface **intuitiva, moderna e com acabamento profissional de plataforma SaaS**, mantendo a simplicidade de execução no container Nginx (sem exigir pipelines pesados de compilação Node.js durante o build), a aplicação Web (`web-app/`) utiliza uma stack reativa moderna carregada via ES Modules/CDN:
+
+| Framework / Biblioteca | Papel na Interface Visual | Benefício de UX |
+|---|---|---|
+| **Vue.js 3 (Composition API)** | Reatividade de estado, renderização declarativa de componentes e transição instantânea entre abas/telas sem recarregar a página (*Single-Page Application*). | Atualização em tempo real de saldo de vagas, status de inscrição, carrinho de pagamento e contadores de notificações. |
+| **Tailwind CSS + DaisyUI 4** | Sistema de design utilitário e biblioteca de componentes semânticos profissionais (Cards, Drawers, Steps, Badges, Avatars, Tabs, Modals e Tabelas estilizadas). | Visual limpo e corporativo (paleta *Indigo/Slate/Emerald*), suporte nativo a temas Claro/Escuro (*Dark Mode*) e responsividade total. |
+| **Lucide Icons / Remix Icon** | Conjunto de ícones vetoriais modernos e consistentes em todos os itens de menu, botões de ação e indicadores de status. | Facilita a leitura visual rápida (*scannability*) de cada funcionalidade e estado do sistema. |
+| **Chart.js 4** | Renderização de gráficos interativos e animados no Dashboard Gerencial do Organizador (**RF11**). | Exibe visualmente gráficos de rosca (*Doughnut*) para distribuição de status de inscrições e gráficos de barras comparando Capacidade × Ocupação × Comparecimento (Check-ins). |
+| **SweetAlert2** | Modais elegantes, confirmações de ações críticas (cancelamento de evento/inscrição) e notificações *Toast* flutuantes no canto superior. | Feedback visual imediato e profissional para erros de regra de negócio (`409 Conflict`, `422 Unprocessable Entity`, `503 Service Unavailable`). |
+
+#### Estrutura de Navegação (Menu Lateral Moderno + Topbar Inteligente)
+A interface adota o padrão **App Shell Dashboard** composto por:
+1. **Sidebar Lateral Moderna (Retrátil e Contextual por Perfil)**:
+   - **Cabeçalho de Marca**: Logotipo **EventHub**, indicador de versão e *status pill* da arquitetura.
+   - **Seção Participante (`PARTICIPANT`)**:
+     - `🧭 Explorar Eventos`: Vitrine de eventos publicados em formato de *Hero Cards*, busca instantânea com filtros por categoria/gratuidade, linha do tempo da programação e barras de progresso coloridas indicando a taxa de ocupação de vagas em tempo real (**RF04**).
+     - `🎟️ Minhas Inscrições & Fila`: Visão consolidada com *badges* semânticos (`CONFIRMED` em verde, `PENDING_PAYMENT` em âmbar, `WAITLIST` em azul, `CANCELLED`/`REFUSED` em vermelho), posição na fila de espera e ação rápida para cancelar ou pagar (**RF05, RF06**).
+     - `💳 Checkout de Pagamentos`: Simulador visual de gateway financeiro com resumo do pedido e botões de ação em 1 clique para **Aprovar Pagamento**, **Simular Cartão Recusado** ou **Simular Expiração/Timeout** (**RF07, RN02, RN03**).
+     - `🎓 Meus Certificados`: Galeria de certificados conquistados com visualização em modal estilizado como diploma oficial (pronto para impressão/PDF) e verificador público de código de autenticidade (**RF10, RN06**).
+   - **Seção Organizador (`ORGANIZER`)**:
+     - `📅 Meus Eventos & Programação`: Painel administrativo com *stepper/modal* para criar, editar, publicar ou cancelar eventos (**RF02**) e adicionar atividades com configuração de capacidade, preço e *toggle switch* de Lista de Espera (**RF03**).
+     - `✅ Credenciamento & Check-in`: Terminal rápido de recepção com filtro de participantes confirmados, botão de registro de presença com feedback sonoro/visual e proteção contra check-in duplicado (**RF09**).
+     - `📊 Analytics & Indicadores`: Dashboard executivo com 4 *KPI Cards* no topo (Total de Inscritos, Receita Confirmada, Taxa Média de Ocupação e Comparecimento Efetivo) acompanhados dos gráficos interativos do **Chart.js** (**RF11**).
+   - **Seção Administração & Laboratório Arquitetural (Integrada ao Sistema — Sem Necessidade de Terminal)**:
+     - `⚡ Validação Arquitetural & Chaos Lab`: Painel administrativo interativo onde os testes de **Concorrência de Vagas (`RN01`)** e **Tolerância a Falhas / Resiliência (`RN03`, `RN04`, `RN05`)** são executados diretamente pelo navegador com 1 clique, exibindo o resultado em componentes visuais amigáveis (*KPI Cards*, gráficos **Chart.js**, barras de progresso, linha do tempo passo a passo e tabela de requisições paralelas com latência individual em `ms` e status HTTP).
+2. **Topbar Superior**:
+   - *Breadcrumb* da tela ativa, alternador rápido de contas de demonstração (*Quick-Login Demo Switcher*: Organizador, Participante 1, Participante 2) para agilizar a defesa oral do trabalho, botão de sino de **Notificações** com *badge* numérico abrindo um *Slide-Over Drawer* lateral (**RF08**) e perfil do usuário autenticado (**RF01, RN07**).
+
 ---
 
 ## 4. Modelo de Dados no Banco PostgreSQL Único (`eventhub_db`)
@@ -250,7 +283,7 @@ A tabela abaixo consolida quais **Requisitos Funcionais (RF)**, **Regras de Neg�
 | Passo | Componente / Microsserviço | Stack | Requisitos Funcionais (RF) | Regras de Negócio (RN) | Requisitos de Qualidade (RQ) |
 |---|---|---|---|---|---|
 | **Passo 1** | Infra de Dados (`postgres`) | PostgreSQL 16 + Docker | Suporte estrutural a **RF01–RF11** | Constraints de banco para **RN01, RN06, RN07** | **RQ04** (Consistência ACID), **RQ07** (Sem segredos hardcoded), **RQ08** (Operabilidade local) |
-| **Passo 2** | API Gateway + Base Web (`api-gateway`) | Nginx + HTML/JS | Ponto de entrada para **RF01–RF11** | Roteamento protegido p/ **RN07** | **RQ05** (Interoperabilidade HTTP/JSON), **RQ06** (Logs de acesso/rastreamento), **RQ08** |
+| **Passo 2** | API Gateway + App Shell (`api-gateway`) | Nginx + **Vue 3 / Tailwind / DaisyUI** | Ponto de entrada e layout moderno c/ Sidebar para **RF01–RF11** | Roteamento protegido e menu contextual por papel (**RN07**) | **RQ05** (Interoperabilidade HTTP/JSON), **RQ06** (Logs de acesso/rastreamento), **RQ08** |
 | **Passo 3** | **1. Serviço de Usuários/Perfis** (`user-service`) | Java 21 / Spring Boot | **RF01** (Cadastro, autenticação e manutenção de perfis) | **RN07** (Segurança e acesso; diferenciação `PARTICIPANT` e `ORGANIZER`) | **RQ01** (Implantação independente), **RQ07** (Autenticação JWT e hash de senha) |
 | **Passo 4** | **2. Serviço de Eventos e Programações** (`event-service` - Parte 1) | Java 21 / Spring Boot | **RF02** (Criar, editar, publicar e cancelar eventos)<br>**RF03** (Cadastrar atividades, horários, locais, vagas e regras) | **RN07** (Organizadores administram apenas eventos sob sua responsabilidade) | **RQ01**, **RQ05**, **RQ07** |
 | **Passo 5** | **3. Serviço de Busca** (`search-service`) | Python 3.12 / FastAPI | **RF04** (Consultar eventos publicados, programação, vagas e detalhes das atividades) | Filtra apenas eventos com status `PUBLISHED` e calcula vagas disponíveis em tempo real (**RN01/RN04**) | **RQ02** (Escalabilidade seletiva para alta carga de leitura), **RQ05** (Interoperabilidade Java/Python) |
@@ -258,7 +291,7 @@ A tabela abaixo consolida quais **Requisitos Funcionais (RF)**, **Regras de Neg�
 | **Passo 7** | **5. Serviço de Pagamento** (`payment-service`) | Python 3.12 / FastAPI | **RF07** (Iniciar pagamento por provedor simulado e registrar confirmação, recusa ou expiração) | **RN02** (Geração de cobrança pendente e confirmação)<br>**RN03** (Tratamento de pagamento recusado ou expirado)<br>**RN05** (Aviso de pagamento resiliente a falhas de notificação) | **RQ04** (Transições controladas de estado de pagamento), **RQ05**, **RQ06** |
 | **Passo 8** | **4. Serviço de Inscrição** (`registration-service` - Parte 1) | Java 21 / Spring Boot | **RF05** (Solicitar inscrição, consultar situação e cancelar)<br>**RF06** (Respeitar limite de vagas, impedir superlotação e gerir lista de espera)<br>**RF09** (Evitar registros duplicados de inscrição) | **RN01** (Reserva sem *overbooking* sob concorrência)<br>**RN02** (Confirmação após pagamento e expiração de reserva pendente)<br>**RN03** (Liberação de vaga quando pagamento é recusado/expirado)<br>**RN04** (Cancelamento atualiza vaga e promove próximo da lista de espera)<br>**RN05** (Falha na notificação não desfaz inscrição)<br>**RN07** (Participante acessa/cancela apenas suas próprias inscrições) | **RQ02** (Escalabilidade seletiva na abertura de inscrições), **RQ03**, **RQ04**, **RQ05**, **RQ06** |
 | **Passo 9** | **2. `event-service` (Parte 2)** + **4. `registration-service` (Parte 2)** | Java 21 / Spring Boot | **RF09** (Registrar presença/check-in de inscritos no `event-service` e evitar duplicidade)<br>**RF10** (Emitir certificados para elegíveis no `event-service`)<br>**RF11** (Indicadores de inscrições, pagamentos, ocupação e comparecimento no `registration-service`) | **RN06** (Certificados emitidos apenas após conclusão da atividade e para participantes com presença registrada)<br>**RN07** (Apenas organizador responsável registra check-in e acessa relatórios do evento) | **RQ01** (Evolução de certificados independente), **RQ03** (Relatórios não bloqueiam inscrições), **RQ04** |
-| **Passo 10** | Aplicação Web Completa (`web-app`) + Scripts de Validação | HTML5/JS/Bootstrap + Python | Interface integrada para **RF01 a RF11** | Validação automatizada e visual de **RN01 a RN07** | Validação experimental de **RQ02, RQ03, RQ04, RQ05, RQ06 e RQ08** |
+| **Passo 10** | Aplicação Web Completa (`web-app`) + **Módulo Admin de Validação Arquitetural (RN01/RN05)** | **Vue.js 3 + Tailwind/DaisyUI + Chart.js + SweetAlert2** | Interface SaaS moderna para **RF01 a RF11** + Painel Administrativo de Testes Visuais | Execução e visualização amigável na Web dos testes de **RN01 a RN07** (sem necessidade de terminal) | Validação experimental visual de **RQ02, RQ03, RQ04, RQ05, RQ06 e RQ08** |
 
 ---
 
@@ -285,23 +318,24 @@ A tabela abaixo consolida quais **Requisitos Funcionais (RF)**, **Regras de Neg�
 
 ---
 
-### Passo 2: Infraestrutura de API Gateway (Nginx) e Casca da Aplicação Web
-- **Serviço/Componente Alvo**: `api-gateway` e `web-app` (Infraestrutura de Borda e Cliente Web).
+### Passo 2: Infraestrutura de API Gateway (Nginx) e App Shell Moderno da Aplicação Web
+- **Serviço/Componente Alvo**: `api-gateway` e `web-app` (Infraestrutura de Borda e Base Visual em **Vue.js 3 + Tailwind CSS + DaisyUI**).
 - **Requisitos Funcionais Contemplados**:
   - Roteamento reverso centralizado para todas as capacidades de negócio (**RF01 a RF11**) através dos prefixos `/api/users`, `/api/events`, `/api/search`, `/api/registrations`, `/api/payments` e `/api/notifications`.
+  - Entrega do **App Shell Moderno** com **Menu Lateral (Sidebar) Retrátil**, **Topbar** com alternador de temas Claro/Escuro, sino de notificações com *Slide-Over Drawer* e monitor visual de conectividade dos 6 microsserviços.
 - **Regras de Negócio (RN) Contempladas**:
-  - **RN07 (Segurança e acesso)**: Repasse transparente do cabeçalho `Authorization: Bearer <token>` do cliente Web para todos os microsserviços *downstream*.
+  - **RN07 (Segurança e acesso)**: Repasse transparente do cabeçalho `Authorization: Bearer <token>` do cliente Web para todos os microsserviços *downstream* e controle reativo de visibilidade de menus conforme o perfil (`PARTICIPANT` vs. `ORGANIZER`).
 - **Requisitos de Qualidade (RQ) Contemplados**:
   - **RQ05 (Interoperabilidade)**: Exposição de contratos HTTP/JSON unificados na porta `8080`, abstraindo se o serviço de destino foi escrito em Java/Spring Boot ou Python/FastAPI.
   - **RQ06 (Observabilidade)**: Propagação de cabeçalho `X-Correlation-ID` e logs centralizados de requisição no Nginx.
   - **RQ08 (Operabilidade)**: Subida imediata sem falha caso serviços *downstream* ainda não estejam ativos (`resolver 127.0.0.11 valid=10s;`).
 - **Arquivos criados/atualizados**:
   - `infra/gateway/nginx.conf`
-  - `web-app/index.html`, `web-app/css/styles.css`, `web-app/js/api.js`, `web-app/js/app.js`
+  - `web-app/index.html`, `web-app/css/styles.css`, `web-app/js/api.js`, `web-app/js/store.js`, `web-app/js/app.js`
   - Atualização do `docker-compose.yml` com o serviço `api-gateway`.
 - **Critério de Verificação Autocontida**:
   - Executar `docker compose up -d api-gateway`.
-  - Acessar `http://localhost:8080` no navegador e testar `http://localhost:8080/health`.
+  - Acessar `http://localhost:8080` no navegador (validando o menu lateral moderno, os componentes DaisyUI/Tailwind e o painel de saúde da arquitetura) e testar `http://localhost:8080/health`.
 
 ---
 
@@ -488,24 +522,47 @@ A tabela abaixo consolida quais **Requisitos Funcionais (RF)**, **Regras de Neg�
 
 ---
 
-### Passo 10: Aplicação Web Completa e Scripts de Validação Arquitetural (Concorrência e Falhas)
-- **Serviços/Componentes Alvo**: Aplicação Web (`web-app`) e Suite de Testes de Validação (`scripts/`).
+### Passo 10: Aplicação Web Completa (SPA Moderna) e Painel Administrativo de Validação Arquitetural (Concorrência e Falhas na UI)
+- **Serviços/Componentes Alvo**: Aplicação Web Reativa (`web-app` em **Vue.js 3 + Tailwind CSS + DaisyUI + Chart.js + SweetAlert2 + Lucide Icons**), Motor Visual de Testes (`web-app/js/lab-runner.js`) e endpoints de apoio para simulação.
 - **Requisitos Funcionais Contemplados**:
-  - Interface gráfica Web responsiva cobrindo **RF01 a RF11** em um único painel dividido por perfil:
-    - **Módulo Participante**: Cadastro/Login (**RF01**), Busca de Eventos e Vagas (**RF04**), Inscrição Gratuita, Paga e Lista de Espera (**RF05, RF06**), Checkout Simulado de Pagamento (**RF07**), Central de Notificações (**RF08**) e Emissão/Visualização de Certificados (**RF10**).
-    - **Módulo Organizador**: Gestão de Eventos e Publicação (**RF02**), Cadastro e Conclusão de Atividades (**RF03**), Painel de Check-in de Presença (**RF09**) e Dashboard de Indicadores Operacionais e Financeiros (**RF11**).
-- **Regras de Negócio (RN) Validadas Experimentalmente**:
-  - **Validação de RN01 (Reserva de vaga sem overbooking)**: O script `scripts/test_concurrency.py` dispara 20 requisições paralelas para uma atividade com apenas 3 vagas, comprovando que exatamente 3 inscrições ficam `CONFIRMED`, as demais vão para `WAITLIST` (ou são recusadas) e `occupied_slots` nunca ultrapassa `3`.
-  - **Validação de RN02, RN03 e RN04 (Ciclo de Pagamento, Recusa, Expiração e Lista de Espera)**: O script `scripts/test_fault_tolerance.py` valida que a recusa/expiração do pagamento libera a vaga e promove automaticamente o primeiro participante da `WAITLIST`.
-  - **Validação de RN05 (Notificações desacopladas)**: O script ativa a falha simulada (`503`) no `notification-service` e executa uma inscrição completa, comprovando que a inscrição é confirmada com sucesso mesmo com o serviço de notificações inoperante.
-  - **Validação de RN06 e RN07**: Verificação automatizada de bloqueio de certificado antes do check-in/conclusão e bloqueio de acesso cruzado entre usuários/organizadores.
+  - Interface gráfica Web profissional com **Menu Lateral Contextual (Sidebar)**, **Topbar com Quick-Switch de Perfis**, *Slide-Over Drawer* de Notificações e componentes visuais modernos cobrindo **RF01 a RF11**:
+    - **Módulo Participante**:
+      - Autenticação moderna e edição de perfil (**RF01**).
+      - Vitrine de Eventos e Programação em *Hero Cards* com busca reativa, filtros de gratuidade e barras de progresso de ocupação de vagas em tempo real (**RF04**).
+      - Painel "Minhas Inscrições & Fila de Espera" com *status badges*, contador de expiração e cancelamento modal (**RF05, RF06**).
+      - Modal de Checkout Simulado estilo *fintech* para aprovar, recusar ou expirar pagamentos em 1 clique (**RF07**).
+      - *Drawer* lateral de Notificações em tempo real (**RF08**).
+      - Galeria e Visualizador de Certificados com layout de diploma imprimível e validador de código de autenticidade (**RF10**).
+    - **Módulo Organizador**:
+      - Gestão de Eventos e Publicação com modais e *badges* de ciclo de vida (`DRAFT`, `PUBLISHED`, `CANCELLED`) (**RF02**).
+      - Cadastro e Conclusão de Atividades com *toggle switch* de Lista de Espera (**RF03**).
+      - Terminal ágil de Credenciamento e Check-in de Presença com bloqueio visual de duplicidade (**RF09**).
+      - Dashboard Executivo de Indicadores (**RF11**) com *KPI Cards* e gráficos interativos em **Chart.js** (gráfico de rosca de status de inscrições e gráfico de barras de Capacidade × Ocupação × Comparecimento).
+    - **Módulo Administração — Laboratório de Validação Arquitetural (Execução Visual na Própria Aplicação Web, Sem Terminal)**:
+      1. **Simulador Visual de Concorrência e Anti-Overbooking (`RN01` e `RF06`)**:
+         - **Configuração Interativa**: Permite escolher na tela a capacidade da atividade de teste (ex.: `3 vagas`), o número de requisições simultâneas disparadas via `Promise.all` (ex.: `20 participantes concorrentes`) e se a Lista de Espera está habilitada.
+         - **Visualização Amigável do Output**:
+           - *KPI Cards de Resultado*: Total de Requisições (`20`), Vagas Confirmadas (`3`), Alocados na Lista de Espera (`17`), Overbooking Detectado (`0 — PASS ✅`).
+           - *Gráfico Interativo (Chart.js)*: Distribuição visual das respostas concorrentes (`CONFIRMED` vs. `WAITLIST` vs. `409 Conflict`).
+           - *Grade Visual de Threads/Requisições*: Tabela amigável exibindo cada uma das 20 requisições simultâneas com seu número de thread, participante, tempo de resposta em milissegundos (`ms`), status HTTP e *badge* colorido do resultado obtido.
+      2. **Simulador Visual de Tolerância a Falhas e Resiliência (`RN03`, `RN04` e `RN05`)**:
+         - **Cenário 1 — Queda do Serviço de Notificação (`RN05` / `RQ03`)**:
+           - Ao clicar em **"Executar Teste de Falha de Notificação"**, o painel executa automaticamente 4 etapas visuais em um componente *Stepper* animado:
+             1. Ativa o modo de falha (`503 Service Unavailable`) no `notification-service`;
+             2. Realiza uma inscrição em atividade no `registration-service`;
+             3. Exibe o resultado comprovando que a inscrição foi **Confirmada (`201 Created`)** mesmo com o `notification-service` fora do ar (Degradação Graciosa);
+             4. Restaura o `notification-service` para o estado saudável (`UP`).
+         - **Cenário 2 — Recusa/Expiração de Pagamento e Promoção Automática da Fila (`RN02`, `RN03` e `RN04`)**:
+           - Ao clicar em **"Executar Teste de Compensação de Pagamento & Fila"**, o *Stepper* visual demonstra passo a passo:
+             1. Participante A ocupa a última vaga com pagamento pendente (`PENDING_PAYMENT`);
+             2. Participante B tenta se inscrever e entra em `WAITLIST`;
+             3. O pagamento do Participante A é recusado (`REFUSED` no `payment-service`);
+             4. O painel exibe em tempo real a vaga sendo liberada e o Participante B sendo promovido automaticamente da `WAITLIST`.
 - **Arquivos atualizados/criados**:
-  - `web-app/index.html`, `web-app/css/styles.css`, `web-app/js/api.js`, `web-app/js/app.js`
-  - `scripts/test_concurrency.py`
-  - `scripts/test_fault_tolerance.py`
+  - `web-app/index.html`, `web-app/css/styles.css`, `web-app/js/api.js`, `web-app/js/store.js`, `web-app/js/lab-runner.js`, `web-app/js/components/`, `web-app/js/app.js`
+  - `scripts/test_concurrency.py` e `scripts/test_fault_tolerance.py` (mantidos apenas como alternativa opcional de linha de comando).
 - **Critério de Verificação Autocontida**:
-  - Acessar `http://localhost:8080` e navegar por todo o fluxo na interface Web.
-  - Executar `python scripts/test_concurrency.py` e `python scripts/test_fault_tolerance.py`, obtendo `100% PASS` em todos os cenários críticos.
+  - Acessar `http://localhost:8080`, abrir o menu **"⚡ Validação Arquitetural & Chaos Lab"** na barra lateral e clicar nos botões de execução dos testes de Concorrência (`RN01`) e Tolerância a Falhas (`RN03`/`RN05`), visualizando os cards de aprovação (`100% PASS`), gráficos e linha do tempo diretamente na tela do sistema.
 
 ---
 

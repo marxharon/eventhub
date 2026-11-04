@@ -1,0 +1,55 @@
+/* ==========================================================================
+   EventHub SaaS Modern UI - Custom Styles & Animations
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+/* Scrollbar sutil */
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.7);
+}
+
+/* Transições suaves entre abas */
+.fade-enter-active,
+.fade-leave-active {
+    transition: opacity 0.18s ease, transform 0.18s ease;
+}
+.fade-enter-from,
+.fade-leave-to {
+    opacity: 0;
+    transform: translateY(4px);
+}
+
+/* Estilo de Certificado Oficial para Impressão (RF10 / RN06) */
+.certificate-diploma {
+    background: radial-gradient(circle at top right, rgba(99, 102, 241, 0.08), transparent 60%),
+                linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    border: 8px double #312e81;
+    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.15);
+}
+
+@media print {
+    .no-print {
+        display: none !important;
+    }
+    .certificate-diploma {
+        box-shadow: none;
+        width: 100%;
+        margin: 0;
+    }
+}
