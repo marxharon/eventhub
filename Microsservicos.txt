@@ -1,0 +1,9 @@
+Microsserviços
+
+1.Serviço de Usuários/Perfis: Permite cadastro, autenticação e manutenção de perfis de participantes e organizadores; diferenciar permissões (RF01). 
+2.Serviço de Eventos e Programações: Permite criar, editar, publicar e cancelar eventos, definindo organização responsável, período e informações públicas (RF02). Permite cadastrar atividades vinculadas a eventos, com horários, responsáveis, locais e regras de inscrição (RF03). Registrar a presença de participantes inscritos (RF09).
+Emitir certificados para participantes elegíveis segundo regras de presença e conclusão (RF10)
+3.Serviço de Busca: Permite consultar eventos publicados, programação, vagas e detalhes das atividades (RF04).
+4.Serviço de Inscrição: Permite solicitar inscrição, consultar situação e cancelar inscrições conforme regras do evento (RF05). Respeita limite de vagas; impede superlotação mesmo sob concorrência; permite lista de espera quando habilitada (RF06). Disponibilizar indicadores de inscrições, pagamentos, ocupação e comparecimento para organizadores (RF11).Evitar registros duplicados (RF09)
+5.Serviço de Pagamento: Permite iniciar pagamento por um provedor externo simulado e registrar confirmação, recusa ou expiração (RF07).
+6.Serviço de Notificação: Comunica inscrição, confirmação, cancelamento, pagamento e alterações relevantes; indisponibilidade de notificações não deve bloquear operações essenciais (RF08).

@@ -1,0 +1,25 @@
+# Arquivos temporários do Office/LibreOffice
+.~lock.*
+~$*
+
+# Variáveis de ambiente com segredos reais
+.env
+
+# Build Java / Maven
+target/
+*.jar
+*.war
+*.class
+
+# Python / FastAPI
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# IDEs e Sistema Operacional
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
