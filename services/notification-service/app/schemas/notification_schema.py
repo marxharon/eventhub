@@ -17,8 +17,13 @@ class NotificationResponse(BaseModel):
     message: str
     status: str
     createdAt: datetime
+    read: bool
 
 
 class FailureSimulationState(BaseModel):
     simulateFailure: bool
     message: str
+
+
+class DeletedCountResponse(BaseModel):
+    deleted: int

@@ -146,6 +146,22 @@ createApp({
             await loadUserNotifications();
         }
 
+        async function markNotificationAsRead(item) {
+            const res = await window.EventHubAPI.request(`/api/notifications/${item.id}/read`, { method: 'PATCH' });
+            if (res.ok) await loadUserNotifications();
+        }
+
+        async function deleteNotification(item) {
+            const res = await window.EventHubAPI.request(`/api/notifications/${item.id}`, { method: 'DELETE' });
+            if (res.ok) await loadUserNotifications();
+        }
+
+        async function deleteReadNotifications() {
+            if (!state.currentUser || !state.currentUser.id) return;
+            const res = await window.EventHubAPI.request(`/api/notifications/user/${state.currentUser.id}/read`, { method: 'DELETE' });
+            if (res.ok) await loadUserNotifications();
+        }
+
         async function loadNotificationFailureState() {
             const res = await window.EventHubAPI.request('/api/notifications/simulate-failure');
             if (res.ok && res.data && typeof res.data.simulateFailure === 'boolean') {
@@ -725,6 +741,9 @@ createApp({
             testAccessControlValidator,
             loadUserNotifications,
             openNotificationsDrawer,
+            markNotificationAsRead,
+            deleteNotification,
+            deleteReadNotifications,
             toggleNotificationFailureMode,
             sendTestNotification,
             searchPublishedCatalog,

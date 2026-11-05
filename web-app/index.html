@@ -1165,6 +1165,9 @@
                         <h3 class="font-bold text-base">Notificações Recebidas</h3>
                     </div>
                     <div class="flex items-center gap-1">
+                        <button v-if="state.notifications.some(n => n.read)" @click="deleteReadNotifications" class="btn btn-xs btn-outline btn-error" title="Apagar todas as notificações já lidas">
+                            Apagar lidas
+                        </button>
                         <button @click="loadUserNotifications" class="btn btn-xs btn-ghost" title="Atualizar">
                             <i class="ri-refresh-line"></i>
                         </button>
@@ -1188,6 +1191,14 @@
                             <span>Para: {{ item.recipientEmail }}</span>
                             <span class="badge badge-xs badge-success text-white">{{ item.status }}</span>
                         </div>
+                        <div class="flex justify-end pt-1">
+                            <button v-if="!item.read" @click="markNotificationAsRead(item)" class="btn btn-xs btn-outline">
+                                Marcar como lida
+                            </button>
+                            <button v-else @click="deleteNotification(item)" class="btn btn-xs btn-outline btn-error">
+                                Apagar
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div v-else class="flex-1 p-6 overflow-y-auto flex flex-col items-center justify-center text-center text-base-content/60">
@@ -1199,8 +1210,8 @@
 
     </div>
 
-    <script src="/js/api.js?v=10"></script>
-    <script src="/js/store.js?v=10"></script>
-    <script src="/js/app.js?v=10"></script>
+    <script src="/js/api.js?v=11"></script>
+    <script src="/js/store.js?v=11"></script>
+    <script src="/js/app.js?v=11"></script>
 </body>
 </html>

@@ -1,5 +1,5 @@
 from datetime import datetime
-from sqlalchemy import Column, BigInteger, String, Text, DateTime
+from sqlalchemy import Column, BigInteger, String, Text, DateTime, Boolean
 from app.config.database import Base
 
 
@@ -13,3 +13,4 @@ class NotificationModel(Base):
     message = Column(Text, nullable=False)
     status = Column(String(30), nullable=False, default="SENT")
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
+    is_read = Column(Boolean, nullable=False, default=False)

@@ -7,6 +7,7 @@ from app.schemas.notification_schema import (
     NotificationSendRequest,
     NotificationResponse,
     FailureSimulationState,
+    DeletedCountResponse,
 )
 
 
@@ -41,6 +42,7 @@ class NotificationService:
             message=model.message,
             status=model.status,
             createdAt=model.created_at,
+            read=model.is_read,
         )
 
     def send_notification(self, payload: NotificationSendRequest) -> NotificationResponse:
@@ -66,3 +68,27 @@ class NotificationService:
     def list_all_notifications(self) -> List[NotificationResponse]:
         items = self.repository.find_all()
         return [self._to_schema(item) for item in items]
+
+    def _get_or_404(self, notification_id: int) -> NotificationModel:
+        notification = self.repository.find_by_id(notification_id)
+        if notification is None:
+            raise HTTPException(status_code=404, detail=f"Notificação {notification_id} não encontrada.")
+        return notification
+
+    def mark_as_read(self, notification_id: int) -> NotificationResponse:
+        notification = self._get_or_404(notification_id)
+        if not notification.is_read:
+            notification = self.repository.mark_as_read(notification)
+        return self._to_schema(notification)
+
+    def delete_notification(self, notification_id: int) -> None:
+        notification = self._get_or_404(notification_id)
+        if not notification.is_read:
+            raise HTTPException(
+                status_code=409,
+                detail="Só é possível apagar notificações já lidas. Marque-a como lida antes.",
+            )
+        self.repository.delete(notification)
+
+    def delete_read_notifications(self, user_id: int) -> DeletedCountResponse:
+        return DeletedCountResponse(deleted=self.repository.delete_read_by_user(user_id))

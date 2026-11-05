@@ -101,8 +101,12 @@ CREATE TABLE IF NOT EXISTS notifications (
     event_type VARCHAR(60) NOT NULL,
     message TEXT NOT NULL,
     status VARCHAR(30) NOT NULL DEFAULT 'SENT' CHECK (status IN ('SENT', 'FAILED')),
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE
 );
+
+-- Bancos criados antes da coluna is_read
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- =============================================================================
 -- DADOS INICIAIS DE EXEMPLO (SEED DATA - RQ08)

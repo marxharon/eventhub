@@ -6,6 +6,7 @@ from app.schemas.notification_schema import (
     NotificationSendRequest,
     NotificationResponse,
     FailureSimulationState,
+    DeletedCountResponse,
 )
 from app.services.notification_service import NotificationService
 
@@ -43,6 +44,24 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
 def list_all_notifications(db: Session = Depends(get_db)):
     service = NotificationService(db)
     return service.list_all_notifications()
+
+
+@router.patch("/{notification_id}/read", response_model=NotificationResponse)
+def mark_notification_as_read(notification_id: int, db: Session = Depends(get_db)):
+    service = NotificationService(db)
+    return service.mark_as_read(notification_id)
+
+
+@router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_notification(notification_id: int, db: Session = Depends(get_db)):
+    service = NotificationService(db)
+    service.delete_notification(notification_id)
+
+
+@router.delete("/user/{user_id}/read", response_model=DeletedCountResponse)
+def delete_read_notifications(user_id: int, db: Session = Depends(get_db)):
+    service = NotificationService(db)
+    return service.delete_read_notifications(user_id)
 
 
 @router.get("/simulate-failure", response_model=FailureSimulationState)

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Optional
 from sqlalchemy.orm import Session
 from app.models.notification_model import NotificationModel
 
@@ -43,3 +43,25 @@ class NotificationRepository:
             .limit(100)
             .all()
         )
+
+    def find_by_id(self, notification_id: int) -> Optional[NotificationModel]:
+        return self.db.query(NotificationModel).filter(NotificationModel.id == notification_id).first()
+
+    def mark_as_read(self, notification: NotificationModel) -> NotificationModel:
+        notification.is_read = True
+        self.db.commit()
+        self.db.refresh(notification)
+        return notification
+
+    def delete(self, notification: NotificationModel) -> None:
+        self.db.delete(notification)
+        self.db.commit()
+
+    def delete_read_by_user(self, user_id: int) -> int:
+        deleted = (
+            self.db.query(NotificationModel)
+            .filter(NotificationModel.user_id == user_id, NotificationModel.is_read.is_(True))
+            .delete(synchronize_session=False)
+        )
+        self.db.commit()
+        return deleted
