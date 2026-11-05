@@ -2,6 +2,7 @@ package com.eventhub.event.controller;
 
 import com.eventhub.event.dto.AttendanceCheckInRequest;
 import com.eventhub.event.dto.AttendanceResponse;
+import com.eventhub.event.dto.EventRegistrationResponse;
 import com.eventhub.event.service.AttendanceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -9,11 +10,15 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
+
+import java.util.List;
 
 @Tag(name = "Check-in", description = "Credenciamento e registro de presença (RF09)")
 @RestController
@@ -24,6 +29,20 @@ public class AttendanceController {
 
     public AttendanceController(AttendanceService attendanceService) {
         this.attendanceService = attendanceService;
+    }
+
+    @Operation(summary = "Lista as inscrições confirmadas de um evento para o credenciamento (RN07)")
+    @GetMapping("/events/{eventId}/registrations")
+    public List<EventRegistrationResponse> listEventRegistrations(
+            @PathVariable Long eventId,
+            HttpServletRequest request
+    ) {
+        Long userId = (Long) request.getAttribute("authenticatedUserId");
+        String role = (String) request.getAttribute("authenticatedRole");
+        if (userId == null) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Token JWT ausente ou inválido.");
+        }
+        return attendanceService.listEventRegistrations(eventId, userId, role);
     }
 
     @Operation(summary = "Registra a presença (check-in) de uma inscrição")

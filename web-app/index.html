@@ -1130,6 +1130,15 @@
                                                 :value="act.occupiedSlots"
                                                 :max="act.capacity"
                                             ></progress>
+                                            <button
+                                                v-if="act.availableSlots > 0"
+                                                @click="registerInActivity(act)"
+                                                :disabled="isRegisteringActivity"
+                                                class="btn btn-sm btn-primary w-full gap-2"
+                                            >
+                                                <i class="ri-ticket-2-line"></i>
+                                                {{ isRegisteringActivity ? 'Processando...' : 'Inscrever-se nesta atividade' }}
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
@@ -1291,17 +1300,67 @@
                     <section v-else-if="state.activeView === 'checkin-terminal'" class="space-y-6">
                         <div class="bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
                             <h2 class="text-xl font-bold flex items-center gap-2"><i class="ri-qr-scan-2-line text-indigo-600"></i> Credenciamento & Check-in</h2>
-                            <p class="text-xs text-base-content/60 mt-0.5">Informe o ID da inscrição confirmada do participante para registrar a presença.</p>
+                            <p class="text-xs text-base-content/60 mt-0.5">Selecione o evento, localize o participante na lista de inscritos e registre a presença. Certificados ficam disponíveis no perfil do participante após a conclusão da atividade.</p>
                         </div>
 
                         <div class="card bg-base-100 border border-base-300 shadow-sm">
-                            <div class="card-body p-6 space-y-3">
-                                <div class="flex flex-col sm:flex-row gap-2">
-                                    <input v-model.number="checkinForm.registrationId" type="number" min="1" placeholder="ID da inscrição" class="input input-sm input-bordered flex-1" @keyup.enter="submitCheckin" />
-                                    <button @click="submitCheckin" class="btn btn-sm btn-primary gap-2" :disabled="isCheckingIn">
-                                        <i class="ri-user-follow-line"></i>
-                                        Registrar presença
-                                    </button>
+                            <div class="card-body p-6 space-y-4">
+                                <div class="flex flex-col md:flex-row gap-3 md:items-end">
+                                    <label class="form-control flex-1">
+                                        <span class="label-text text-xs font-semibold mb-1">Evento</span>
+                                        <select class="select select-sm select-bordered" :value="checkinEventId" @change="selectCheckinEvent(Number($event.target.value))">
+                                            <option v-if="organizerEvents.length === 0" :value="null" disabled>Nenhum evento sob sua responsabilidade</option>
+                                            <option v-for="evt in organizerEvents" :key="evt.id" :value="evt.id">{{ evt.title }}</option>
+                                        </select>
+                                    </label>
+                                    <label class="form-control flex-1">
+                                        <span class="label-text text-xs font-semibold mb-1">Buscar inscrito</span>
+                                        <input v-model="checkinSearch" type="text" placeholder="Nome, e-mail ou atividade" class="input input-sm input-bordered" />
+                                    </label>
+                                    <div class="text-xs text-base-content/70 whitespace-nowrap">
+                                        Presentes: <span class="font-bold">{{ checkinPresentCount }}</span> / {{ checkinRegistrations.length }}
+                                    </div>
+                                </div>
+
+                                <div v-if="isLoadingCheckin" class="text-sm text-base-content/60">Carregando inscritos...</div>
+                                <div v-else-if="checkinEventId && filteredCheckinRegistrations.length === 0" class="text-sm text-base-content/60">Nenhuma inscrição confirmada encontrada para este evento.</div>
+
+                                <div v-if="filteredCheckinRegistrations.length" class="overflow-x-auto">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Participante</th>
+                                                <th>Atividade</th>
+                                                <th>Presença</th>
+                                                <th>Certificado</th>
+                                                <th class="text-right">Ação</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr v-for="reg in filteredCheckinRegistrations" :key="reg.registrationId">
+                                                <td>
+                                                    <div class="font-semibold">{{ reg.userName }}</div>
+                                                    <div class="text-xs text-base-content/60">{{ reg.userEmail }}</div>
+                                                </td>
+                                                <td class="text-xs">{{ reg.activityTitle }}</td>
+                                                <td>
+                                                    <span v-if="reg.checkedIn" class="badge badge-sm badge-success">Presente</span>
+                                                    <span v-else class="badge badge-sm badge-ghost">Aguardando</span>
+                                                </td>
+                                                <td class="text-xs">
+                                                    <span v-if="!reg.checkedIn" class="text-base-content/50">-</span>
+                                                    <span v-else-if="reg.activityCompleted" class="text-emerald-600 font-semibold">Disponível</span>
+                                                    <span v-else class="text-base-content/60">Após conclusão da atividade</span>
+                                                </td>
+                                                <td class="text-right">
+                                                    <button @click="checkInRegistration(reg)" class="btn btn-xs btn-primary gap-1" :disabled="reg.checkedIn || isCheckingIn">
+                                                        <i class="ri-user-follow-line"></i>
+                                                        {{ reg.checkedIn ? 'Presença registrada' : 'Registrar presença' }}
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
                                 </div>
                             </div>
                         </div>

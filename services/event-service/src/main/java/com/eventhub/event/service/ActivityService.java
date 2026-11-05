@@ -5,6 +5,7 @@ import com.eventhub.event.dto.ActivityResponse;
 import com.eventhub.event.model.Activity;
 import com.eventhub.event.model.Event;
 import com.eventhub.event.repository.ActivityRepository;
+import com.eventhub.event.repository.AttendanceRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -18,11 +19,20 @@ import java.util.stream.Collectors;
 public class ActivityService {
 
     private final ActivityRepository activityRepository;
+    private final AttendanceRepository attendanceRepository;
     private final EventService eventService;
+    private final CertificateService certificateService;
 
-    public ActivityService(ActivityRepository activityRepository, EventService eventService) {
+    public ActivityService(
+            ActivityRepository activityRepository,
+            AttendanceRepository attendanceRepository,
+            EventService eventService,
+            CertificateService certificateService
+    ) {
         this.activityRepository = activityRepository;
+        this.attendanceRepository = attendanceRepository;
         this.eventService = eventService;
+        this.certificateService = certificateService;
     }
 
     @Transactional(readOnly = true)
@@ -112,6 +122,11 @@ public class ActivityService {
         eventService.getOwnedEventOrThrow(activity.getEventId(), authenticatedUserId);
         activity.setCompleted(true);
         Activity saved = activityRepository.save(activity);
+
+        // Concluída a atividade, os participantes com presença recebem o certificado (RN06) e a notificação
+        attendanceRepository.findByActivityId(activityId)
+                .forEach(attendance -> certificateService.issueForAttendance(attendance, saved));
+
         return ActivityResponse.fromEntity(saved);
     }
 }

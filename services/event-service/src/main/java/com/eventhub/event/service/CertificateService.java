@@ -22,15 +22,43 @@ public class CertificateService {
     private final CertificateRepository certificateRepository;
     private final AttendanceRepository attendanceRepository;
     private final ActivityRepository activityRepository;
+    private final NotificationClient notificationClient;
 
     public CertificateService(
             CertificateRepository certificateRepository,
             AttendanceRepository attendanceRepository,
-            ActivityRepository activityRepository
+            ActivityRepository activityRepository,
+            NotificationClient notificationClient
     ) {
         this.certificateRepository = certificateRepository;
         this.attendanceRepository = attendanceRepository;
         this.activityRepository = activityRepository;
+        this.notificationClient = notificationClient;
+    }
+
+    /**
+     * Emissão automática (RF10 / RN06): disponibiliza o certificado ao participante quando a presença
+     * está registrada e a atividade está concluída. Idempotente; notifica o participante (RN05).
+     */
+    @Transactional
+    public void issueForAttendance(Attendance attendance, Activity activity) {
+        if (!Boolean.TRUE.equals(activity.getCompleted())) {
+            return;
+        }
+        if (certificateRepository.existsByRegistrationId(attendance.getRegistrationId())) {
+            return;
+        }
+        certificateRepository.saveAndFlush(new Certificate(
+                newValidationCode(),
+                attendance.getRegistrationId(),
+                attendance.getUserId(),
+                activity.getId()
+        ));
+        notificationClient.notifyUser(
+                attendance.getUserId(),
+                "CERTIFICATE_AVAILABLE",
+                "O certificado da atividade \"" + activity.getTitle() + "\" está disponível em Meus Certificados."
+        );
     }
 
     /** Emissão de certificado (RF10). Regras RN06: atividade concluída e presença registrada. */

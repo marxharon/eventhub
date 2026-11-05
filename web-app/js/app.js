@@ -217,6 +217,47 @@ createApp({
             }
         }
 
+        // Inscrição do participante em atividade (registration-service via gateway).
+        // A vaga só é efetivada após a confirmação do pagamento; até lá a atividade fica PENDING_PAYMENT.
+        const isRegisteringActivity = Vue.ref(false);
+
+        async function registerInActivity(act) {
+            if (!state.currentUser) return;
+            const confirmation = await Swal.fire({
+                title: 'Confirmar inscrição?',
+                text: `Atividade "${act.title}"${act.paid ? ` (R$ ${Number(act.price).toFixed(2)})` : ' (gratuita)'}.`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, inscrever-me',
+                cancelButtonText: 'Voltar'
+            });
+            if (!confirmation.isConfirmed) return;
+
+            isRegisteringActivity.value = true;
+            try {
+                const res = await window.EventHubAPI.request('/api/registrations', {
+                    method: 'POST',
+                    body: JSON.stringify({ activityId: act.id })
+                });
+                if (res.ok) {
+                    const pending = res.data && res.data.status === 'PENDING_PAYMENT';
+                    Swal.fire({
+                        icon: 'success',
+                        title: pending ? 'Inscrição criada: aguardando pagamento' : 'Inscrição confirmada!',
+                        text: pending
+                            ? 'Um pagamento em aberto foi gerado em "Meus Pagamentos". A vaga será confirmada somente após a aprovação do pagamento.'
+                            : 'Você foi notificado sobre sua inscrição.'
+                    });
+                    await loadUserNotifications();
+                    await loadMyRegistrations();
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Não foi possível realizar a inscrição', text: (res.data && res.data.message) || `HTTP ${res.status}` });
+                }
+            } finally {
+                isRegisteringActivity.value = false;
+            }
+        }
+
         // Estado do Passo 5: Busca e Catálogo Público para Participantes (search-service :8083)
         const publishedEventsCatalog = Vue.ref([]);
         const isSearchingCatalog = Vue.ref(false);
@@ -315,6 +356,9 @@ createApp({
             }
             if (viewId === 'organizer-analytics') {
                 loadAnalyticsReport();
+            }
+            if (viewId === 'checkin-terminal') {
+                loadCheckinScreen();
             }
             state.activeView = viewId;
         }
@@ -819,22 +863,77 @@ createApp({
         // =====================================================================
         // ORGANIZADOR: CREDENCIAMENTO E RELATÓRIOS
         // =====================================================================
-        const checkinForm = reactive({ registrationId: null });
+        const checkinEventId = Vue.ref(null);
+        const checkinRegistrations = Vue.ref([]);
+        const checkinSearch = Vue.ref('');
         const checkinHistory = Vue.ref([]);
+        const isLoadingCheckin = Vue.ref(false);
         const isCheckingIn = Vue.ref(false);
+        const filteredCheckinRegistrations = computed(() => {
+            const term = checkinSearch.value.trim().toLowerCase();
+            if (!term) return checkinRegistrations.value;
+            return checkinRegistrations.value.filter(r =>
+                (r.userName || '').toLowerCase().includes(term) ||
+                (r.userEmail || '').toLowerCase().includes(term) ||
+                (r.activityTitle || '').toLowerCase().includes(term)
+            );
+        });
+        const checkinPresentCount = computed(() => checkinRegistrations.value.filter(r => r.checkedIn).length);
         const analyticsEventId = Vue.ref(null);
         const analyticsReport = Vue.ref(null);
         const isLoadingReport = Vue.ref(false);
         let analyticsChartInstance = null;
 
-        async function submitCheckin() {
-            const registrationId = Number(checkinForm.registrationId);
-            if (!registrationId) {
-                Swal.fire({ icon: 'warning', title: 'Informe o ID da inscrição.' });
+        async function loadCheckinRegistrations() {
+            if (!checkinEventId.value) {
+                checkinRegistrations.value = [];
                 return;
             }
+            isLoadingCheckin.value = true;
+            try {
+                const res = await window.EventHubAPI.request(`/api/events/attendance/events/${checkinEventId.value}/registrations`);
+                if (res.ok && Array.isArray(res.data)) {
+                    checkinRegistrations.value = res.data;
+                } else {
+                    checkinRegistrations.value = [];
+                    Swal.fire({ icon: 'error', title: 'Não foi possível carregar os inscritos.', text: (res.data && res.data.message) || `HTTP ${res.status}` });
+                }
+            } finally {
+                isLoadingCheckin.value = false;
+            }
+        }
+
+        async function loadCheckinScreen() {
+            if (organizerEvents.value.length === 0) {
+                await loadOrganizerEvents();
+            }
+            if (!checkinEventId.value && organizerEvents.value.length > 0) {
+                checkinEventId.value = organizerEvents.value[0].id;
+            }
+            await loadCheckinRegistrations();
+        }
+
+        async function selectCheckinEvent(eventId) {
+            checkinEventId.value = eventId;
+            checkinSearch.value = '';
+            await loadCheckinRegistrations();
+        }
+
+        async function checkInRegistration(registration) {
+            if (registration.checkedIn || isCheckingIn.value) return;
+            const confirmation = await Swal.fire({
+                icon: 'question',
+                title: 'Registrar presença?',
+                text: `${registration.userName} - ${registration.activityTitle}`,
+                showCancelButton: true,
+                confirmButtonText: 'Registrar',
+                cancelButtonText: 'Cancelar'
+            });
+            if (!confirmation.isConfirmed) return;
+
             isCheckingIn.value = true;
             try {
+                const registrationId = registration.registrationId;
                 const res = await window.EventHubAPI.request('/api/events/attendance/check-in', {
                     method: 'POST',
                     body: JSON.stringify({ registrationId })
@@ -845,10 +944,10 @@ createApp({
                     ok: res.ok,
                     httpStatus: res.status,
                     message: res.ok
-                        ? `Presença registrada para a inscrição #${registrationId}.`
+                        ? `Presença registrada: ${registration.userName} (${registration.activityTitle}).`
                         : ((res.data && res.data.message) || `Falha (HTTP ${res.status}).`)
                 });
-                if (res.ok) checkinForm.registrationId = null;
+                if (res.ok) await loadCheckinRegistrations();
             } finally {
                 isCheckingIn.value = false;
             }
@@ -1072,6 +1171,8 @@ createApp({
             markActivityCompleted,
             testAccessControlValidator,
             loadUserNotifications,
+            isRegisteringActivity,
+            registerInActivity,
             openNotificationsDrawer,
             markNotificationAsRead,
             deleteNotification,
@@ -1098,10 +1199,17 @@ createApp({
             simulatePaymentAction,
             loadMyCertificates,
             validateCertificate,
-            checkinForm,
+            checkinEventId,
+            checkinRegistrations,
+            filteredCheckinRegistrations,
+            checkinSearch,
+            checkinPresentCount,
             checkinHistory,
+            isLoadingCheckin,
             isCheckingIn,
-            submitCheckin,
+            loadCheckinScreen,
+            selectCheckinEvent,
+            checkInRegistration,
             analyticsEventId,
             analyticsReport,
             isLoadingReport,
