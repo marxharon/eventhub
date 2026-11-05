@@ -306,7 +306,7 @@
                         </a>
 
                         <!-- Notificações -->
-                        <button @click="state.notificationDrawerOpen = true" class="btn btn-sm btn-ghost btn-circle indicator" title="Notificações">
+                        <button @click="openNotificationsDrawer" class="btn btn-sm btn-ghost btn-circle indicator" title="Notificações">
                             <span class="indicator-item badge badge-xs badge-primary">{{ state.notifications.length }}</span>
                             <i class="ri-notification-3-line text-lg"></i>
                         </button>
@@ -826,14 +826,57 @@
                         </div>
 
                         <div class="card bg-base-100 border border-base-300 shadow-sm">
-                            <div class="card-body p-6 space-y-2">
-                                <h3 class="text-base font-bold flex items-center gap-2">
-                                    <i class="ri-flashlight-line text-amber-500"></i>
-                                    Simuladores de Concorrência de Vagas e Tolerância a Falhas
-                                </h3>
-                                <p class="text-xs text-base-content/60">
-                                    Os simuladores interativos de disputa simultânea de vagas e falha do serviço de notificações serão habilitados nesta tela assim que os microsserviços de Notificação, Pagamento e Inscrição forem ativados nos próximos passos.
-                                </p>
+                            <div class="card-body p-6 space-y-4">
+                                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                    <div>
+                                        <h3 class="text-lg font-bold flex items-center gap-2">
+                                            <i class="ri-notification-badge-line text-amber-500"></i>
+                                            Simulador de Indisponibilidade do Serviço de Notificações
+                                        </h3>
+                                        <p class="text-xs text-base-content/60 mt-0.5">
+                                            Ative ou desative a falha simulada (HTTP 503) no serviço de notificações e teste o envio de comunicados.
+                                        </p>
+                                    </div>
+                                    <label class="label cursor-pointer gap-3 bg-base-200 px-4 py-2 rounded-xl border border-base-300">
+                                        <span class="label-text text-xs font-bold">
+                                            {{ notificationFailureMode ? 'Falha Simulada ATIVA (503)' : 'Serviço Operacional (200)' }}
+                                        </span>
+                                        <input
+                                            type="checkbox"
+                                            class="toggle toggle-error"
+                                            :checked="notificationFailureMode"
+                                            @change="toggleNotificationFailureMode($event.target.checked)"
+                                        />
+                                    </label>
+                                </div>
+
+                                <div class="flex flex-wrap gap-2">
+                                    <button @click="sendTestNotification" class="btn btn-sm btn-primary gap-2">
+                                        <i class="ri-send-plane-line"></i>
+                                        Disparar Notificação de Teste Agora
+                                    </button>
+                                    <button @click="openNotificationsDrawer" class="btn btn-sm btn-outline gap-2">
+                                        <i class="ri-inbox-archive-line"></i>
+                                        Abrir Caixa de Notificações ({{ state.notifications.length }})
+                                    </button>
+                                </div>
+
+                                <div
+                                    v-if="notificationTestResult"
+                                    :class="[
+                                        'p-4 rounded-xl border text-xs space-y-2',
+                                        notificationTestResult.ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-amber-500/10 border-amber-500/30'
+                                    ]"
+                                >
+                                    <div class="flex items-center justify-between font-bold text-sm">
+                                        <span>
+                                            Resposta do Serviço de Notificações: HTTP {{ notificationTestResult.httpStatus }} —
+                                            {{ notificationTestResult.ok ? 'Notificação Entregue e Persistida' : 'Serviço em Falha Simulada (503 Service Unavailable)' }}
+                                        </span>
+                                        <span class="font-mono text-xs">{{ notificationTestResult.latencyMs }}ms</span>
+                                    </div>
+                                    <pre class="text-xs overflow-x-auto whitespace-pre-wrap font-mono bg-base-200/70 p-3 rounded-lg">{{ JSON.stringify(notificationTestResult.payload, null, 2) }}</pre>
+                                </div>
                             </div>
                         </div>
                     </section>
@@ -1077,7 +1120,6 @@
                                                 <div><i class="ri-calendar-schedule-line mr-1.5 text-indigo-600"></i> <strong>Horário:</strong> {{ act.startTime }} até {{ act.endTime }}</div>
                                             </div>
                                         </div>
-
                                         <div class="pt-3 border-t border-base-300 space-y-2">
                                             <div class="flex items-center justify-between text-xs">
                                                 <span class="text-base-content/60">Ocupação da Atividade</span>
@@ -1115,18 +1157,40 @@
         </div>
 
         <!-- DRAWER LATERAL DE NOTIFICAÇÕES -->
-        <div v-if="state.notificationDrawerOpen" class="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs">
+        <div v-if="state.notificationDrawerOpen" class="fixed inset-0 z-50 flex justify-end bg-black/40 backdrop-blur-xs" @click.self="state.notificationDrawerOpen = false">
             <div class="w-full max-w-md bg-base-100 h-full shadow-2xl border-l border-base-300 flex flex-col">
                 <div class="p-4 border-b border-base-300 flex items-center justify-between">
                     <div class="flex items-center gap-2">
                         <i class="ri-notification-badge-line text-indigo-600 text-xl"></i>
-                        <h3 class="font-bold text-base">Notificações</h3>
+                        <h3 class="font-bold text-base">Notificações Recebidas</h3>
                     </div>
-                    <button @click="state.notificationDrawerOpen = false" class="btn btn-sm btn-ghost btn-circle">
-                        <i class="ri-close-line text-lg"></i>
-                    </button>
+                    <div class="flex items-center gap-1">
+                        <button @click="loadUserNotifications" class="btn btn-xs btn-ghost" title="Atualizar">
+                            <i class="ri-refresh-line"></i>
+                        </button>
+                        <button @click="state.notificationDrawerOpen = false" class="btn btn-sm btn-ghost btn-circle">
+                            <i class="ri-close-line text-lg"></i>
+                        </button>
+                    </div>
                 </div>
-                <div class="flex-1 p-6 overflow-y-auto flex flex-col items-center justify-center text-center text-base-content/60">
+                <div v-if="state.notifications.length > 0" class="flex-1 p-4 overflow-y-auto space-y-3">
+                    <div
+                        v-for="item in state.notifications"
+                        :key="item.id"
+                        class="p-3.5 rounded-xl border border-base-300 bg-base-200/50 space-y-1.5"
+                    >
+                        <div class="flex items-center justify-between gap-2">
+                            <span class="badge badge-xs badge-primary font-mono">{{ item.eventType }}</span>
+                            <span class="text-[10px] text-base-content/50 font-mono">{{ item.createdAt }}</span>
+                        </div>
+                        <p class="text-xs font-medium leading-relaxed">{{ item.message }}</p>
+                        <div class="text-[10px] text-base-content/50 flex items-center justify-between pt-1">
+                            <span>Para: {{ item.recipientEmail }}</span>
+                            <span class="badge badge-xs badge-success text-white">{{ item.status }}</span>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="flex-1 p-6 overflow-y-auto flex flex-col items-center justify-center text-center text-base-content/60">
                     <i class="ri-mail-check-line text-4xl mb-2 text-indigo-500"></i>
                     <p class="text-sm font-medium">Sua caixa de notificações está vazia.</p>
                 </div>
@@ -1135,8 +1199,8 @@
 
     </div>
 
-    <script src="/js/api.js?v=9"></script>
-    <script src="/js/store.js?v=9"></script>
-    <script src="/js/app.js?v=9"></script>
+    <script src="/js/api.js?v=10"></script>
+    <script src="/js/store.js?v=10"></script>
+    <script src="/js/app.js?v=10"></script>
 </body>
 </html>

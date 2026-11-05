@@ -130,6 +130,69 @@ createApp({
         // Estado da Tela de Validadores
         const demoAccounts = Vue.ref([]);
         const accessValidatorResult = Vue.ref(null);
+        const notificationFailureMode = Vue.ref(false);
+        const notificationTestResult = Vue.ref(null);
+
+        async function loadUserNotifications() {
+            if (!state.currentUser || !state.currentUser.id) return;
+            const res = await window.EventHubAPI.request(`/api/notifications/user/${state.currentUser.id}`);
+            if (res.ok && Array.isArray(res.data)) {
+                state.notifications = res.data;
+            }
+        }
+
+        async function openNotificationsDrawer() {
+            state.notificationDrawerOpen = true;
+            await loadUserNotifications();
+        }
+
+        async function loadNotificationFailureState() {
+            const res = await window.EventHubAPI.request('/api/notifications/simulate-failure');
+            if (res.ok && res.data && typeof res.data.simulateFailure === 'boolean') {
+                notificationFailureMode.value = res.data.simulateFailure;
+            }
+        }
+
+        async function toggleNotificationFailureMode(failState) {
+            const res = await window.EventHubAPI.request(`/api/notifications/simulate-failure?fail=${failState}`, {
+                method: 'POST'
+            });
+            if (res.ok && res.data) {
+                notificationFailureMode.value = res.data.simulateFailure;
+                if (window.Swal) {
+                    Swal.fire({
+                        toast: true,
+                        position: 'top-end',
+                        icon: res.data.simulateFailure ? 'warning' : 'success',
+                        title: res.data.message,
+                        showConfirmButton: false,
+                        timer: 2500
+                    });
+                }
+            }
+        }
+
+        async function sendTestNotification() {
+            if (!state.currentUser) return;
+            const res = await window.EventHubAPI.request('/api/notifications/send', {
+                method: 'POST',
+                body: JSON.stringify({
+                    userId: state.currentUser.id,
+                    recipientEmail: state.currentUser.email,
+                    eventType: 'SYSTEM_TEST_NOTIFICATION',
+                    message: `Comunicado de teste enviado para ${state.currentUser.name} às ${new Date().toLocaleTimeString('pt-BR')}.`
+                })
+            });
+            notificationTestResult.value = {
+                httpStatus: res.status,
+                ok: res.ok,
+                latencyMs: res.latencyMs,
+                payload: res.data
+            };
+            if (res.ok) {
+                await loadUserNotifications();
+            }
+        }
 
         // Estado do Passo 5: Busca e Catálogo Público para Participantes (search-service :8083)
         const publishedEventsCatalog = Vue.ref([]);
@@ -597,6 +660,8 @@ createApp({
             await loadDemoAccounts();
             await loadOrganizerEvents();
             await searchPublishedCatalog();
+            await loadUserNotifications();
+            await loadNotificationFailureState();
         }
 
         onMounted(async () => {
@@ -635,6 +700,8 @@ createApp({
             activityForm,
             demoAccounts,
             accessValidatorResult,
+            notificationFailureMode,
+            notificationTestResult,
             publishedEventsCatalog,
             isSearchingCatalog,
             selectedCatalogEvent,
@@ -656,6 +723,10 @@ createApp({
             submitActivityForm,
             markActivityCompleted,
             testAccessControlValidator,
+            loadUserNotifications,
+            openNotificationsDrawer,
+            toggleNotificationFailureMode,
+            sendTestNotification,
             searchPublishedCatalog,
             clearSearchFilters,
             openParticipantEventDetails,
