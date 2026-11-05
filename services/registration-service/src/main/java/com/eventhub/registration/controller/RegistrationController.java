@@ -4,6 +4,8 @@ import com.eventhub.registration.dto.CreateRegistrationRequest;
 import com.eventhub.registration.dto.PaymentWebhookRequest;
 import com.eventhub.registration.dto.RegistrationResponse;
 import com.eventhub.registration.service.RegistrationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -14,6 +16,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 
+@Tag(name = "Inscrições", description = "Inscrições, cancelamentos, lista de espera e webhook de pagamento (RF05, RF06, RN01-RN04)")
 @RestController
 @RequestMapping("/api/registrations")
 public class RegistrationController {
@@ -44,6 +47,7 @@ public class RegistrationController {
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
     }
 
+    @Operation(summary = "Lista as inscrições do usuário autenticado")
     @GetMapping("/my")
     public List<RegistrationResponse> listMine(HttpServletRequest request) {
         return registrationService.listMine(currentUserId(request));
@@ -54,11 +58,13 @@ public class RegistrationController {
         return registrationService.getOwned(currentUserId(request), registrationId);
     }
 
+    @Operation(summary = "Cancela uma inscrição do usuário autenticado", description = "Libera a vaga e promove o próximo da lista de espera (RN04).")
     @PatchMapping("/{registrationId}/cancel")
     public RegistrationResponse cancel(@PathVariable Long registrationId, HttpServletRequest request) {
         return registrationService.cancel(currentUserId(request), registrationId);
     }
 
+    @Operation(summary = "Recebe o resultado de pagamento (webhook do payment-service)", description = "Confirma a inscrição ou libera a vaga conforme o resultado do pagamento (RN02, RN03).")
     @PostMapping("/payment-webhook")
     public RegistrationResponse paymentWebhook(@Valid @RequestBody PaymentWebhookRequest body) {
         return registrationService.applyPaymentResult(body);

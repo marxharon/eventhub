@@ -3,6 +3,8 @@ package com.eventhub.event.controller;
 import com.eventhub.event.dto.CertificateIssueRequest;
 import com.eventhub.event.dto.CertificateResponse;
 import com.eventhub.event.service.CertificateService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -12,6 +14,7 @@ import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
+@Tag(name = "Certificados", description = "Emissão e validação de certificados (RF10, RN06)")
 @RestController
 @RequestMapping("/api/events/certificates")
 public class CertificateController {
@@ -22,6 +25,7 @@ public class CertificateController {
         this.certificateService = certificateService;
     }
 
+    @Operation(summary = "Emite certificado de participação", description = "Disponível apenas para inscrições com presença confirmada (check-in).")
     @PostMapping("/issue")
     public ResponseEntity<CertificateResponse> issue(
             @Valid @RequestBody CertificateIssueRequest body,
@@ -33,6 +37,7 @@ public class CertificateController {
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
 
+    @Operation(summary = "Lista os certificados do usuário autenticado")
     @GetMapping("/my")
     public List<CertificateResponse> listMine(HttpServletRequest request) {
         Long userId = currentUserId(request);
@@ -40,6 +45,7 @@ public class CertificateController {
         return certificateService.listMine(userId, role);
     }
 
+    @Operation(summary = "Valida um certificado pelo código de autenticidade")
     @GetMapping("/validate/{validationCode}")
     public CertificateResponse validate(@PathVariable String validationCode) {
         return certificateService.validate(validationCode);

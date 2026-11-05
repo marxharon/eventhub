@@ -3,6 +3,8 @@ package com.eventhub.event.controller;
 import com.eventhub.event.dto.AttendanceCheckInRequest;
 import com.eventhub.event.dto.AttendanceResponse;
 import com.eventhub.event.service.AttendanceService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -13,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+@Tag(name = "Check-in", description = "Credenciamento e registro de presença (RF09)")
 @RestController
 @RequestMapping("/api/events/attendance")
 public class AttendanceController {
@@ -23,6 +26,7 @@ public class AttendanceController {
         this.attendanceService = attendanceService;
     }
 
+    @Operation(summary = "Registra a presença (check-in) de uma inscrição")
     @PostMapping("/check-in")
     public ResponseEntity<AttendanceResponse> checkIn(
             @Valid @RequestBody AttendanceCheckInRequest body,
