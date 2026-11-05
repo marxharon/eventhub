@@ -8,7 +8,7 @@ O **EventHub** é uma plataforma web acadêmica e profissional para gerenciament
 
 A solução adota o padrão **API Gateway + Orquestração REST Síncrona com Degradação Graciosa**, proporcionando baixa complexidade operacional, alto isolamento de responsabilidades e suporte completo às regras críticas de negócio (autenticação JWT por perfil, controle de vagas sob concorrência, lista de espera, pagamentos e notificações).
 
-### Componentes e Microsserviços Implementados Até o Momento (Passos 1 a 5)
+### Componentes e Microsserviços Implementados Até o Momento (Passos 1 a 6)
 
 | Componente / Serviço | Diretório | Tecnologia | Porta Interna | Status | Responsabilidades Implementadas |
 |---|---|---|---|---|---|
@@ -17,8 +17,8 @@ A solução adota o padrão **API Gateway + Orquestração REST Síncrona com De
 | **1. `user-service`** | `services/user-service/` | Java 21 / Spring Boot 3 | `8081` | ✅ Implementado | Cadastro de usuários (`BCrypt`), autenticação (`JWT`), manutenção de perfil e isolamento de permissões (`ORGANIZER` vs. `PARTICIPANT`). |
 | **2. `event-service`** | `services/event-service/` | Java 21 / Spring Boot 3 | `8082` | ✅ Implementado | Criação, edição, publicação e cancelamento de eventos; cadastro e conclusão de atividades da programação com horários, locais, capacidade, preço e lista de espera. |
 | **3. `search-service`** | `services/search-service/` | Python 3.12 / FastAPI | `8083` | ✅ Implementado | Consulta otimizada de eventos publicados, programação detalhada, filtros por palavra-chave/gratuidade e cálculo de saldo de vagas em tempo real. |
-| **6. `notification-service`** | `services/notification-service/` | Python 3.12 / FastAPI | `8086` | ⏳ Próximo (Passo 6) | Envio e histórico de notificações com simulação de indisponibilidade (`503`) sem bloquear operações críticas. |
-| **5. `payment-service`** | `services/payment-service/` | Python 3.12 / FastAPI | `8085` | ⏳ Planejado (Passo 7) | Inicialização e processamento de pagamentos simulados (aprovação, recusa e expiração). |
+| **6. `notification-service`** | `services/notification-service/` | Python 3.12 / FastAPI | `8086` | ✅ Implementado | Envio e histórico de notificações com simulação de indisponibilidade (`503`) sem bloquear operações críticas. |
+| **5. `payment-service`** | `services/payment-service/` | Python 3.12 / FastAPI | `8085` | ⏳ Próximo (Passo 7) | Inicialização e processamento de pagamentos simulados (aprovação, recusa e expiração). |
 | **4. `registration-service`** | `services/registration-service/` | Java 21 / Spring Boot 3 | `8084` | ⏳ Planejado (Passo 8) | Solicitação e cancelamento de inscrições, controle de concorrência (*lock* pessimista), lista de espera e relatórios gerenciais. |
 
 ---
@@ -80,6 +80,7 @@ Todos os microsserviços expõem seus contratos OpenAPI 3.0 através do API Gate
 | **1. `user-service`** | Java 21 / Spring Boot 3 (SpringDoc) | [http://localhost:8080/api/users/openapi.json](http://localhost:8080/api/users/openapi.json) | [Abrir no Portal Swagger](http://localhost:8080/swagger.html) |
 | **2. `event-service`** | Java 21 / Spring Boot 3 (SpringDoc) | [http://localhost:8080/api/events/openapi.json](http://localhost:8080/api/events/openapi.json) | [Abrir no Portal Swagger](http://localhost:8080/swagger.html) |
 | **3. `search-service`** | Python 3.12 / FastAPI | [http://localhost:8080/api/search/openapi.json](http://localhost:8080/api/search/openapi.json) | [http://localhost:8080/api/search/docs](http://localhost:8080/api/search/docs) |
+| **6. `notification-service`** | Python 3.12 / FastAPI | [http://localhost:8080/api/notifications/openapi.json](http://localhost:8080/api/notifications/openapi.json) | [http://localhost:8080/api/notifications/docs](http://localhost:8080/api/notifications/docs) |
 
 > **Dica de Autenticação no Swagger**: Para testar endpoints protegidos (`POST`, `PUT`, `PATCH`), faça login em `POST /api/users/login`, copie o `token` retornado e clique no botão **"Authorize"** no topo do Swagger UI.
 
