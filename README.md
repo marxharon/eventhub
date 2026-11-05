@@ -62,12 +62,26 @@ docker compose ps
 
 ---
 
-## 4. Acesso à Aplicação Web e Credenciais Iniciais
+## 4. Acesso à Aplicação Web, Documentação Swagger e Credenciais Iniciais
 
 Com os containers em execução, acesse no navegador:
 
 - **Aplicação Web (SPA) e API Gateway**: [http://localhost:8080](http://localhost:8080)
+- **Portal Unificado Swagger UI / OpenAPI 3.0**: [http://localhost:8080/swagger.html](http://localhost:8080/swagger.html)
 - **Healthcheck do Gateway**: [http://localhost:8080/health](http://localhost:8080/health)
+
+### Documentação Interativa das APIs (Swagger / OpenAPI 3.0)
+
+Todos os microsserviços expõem seus contratos OpenAPI 3.0 através do API Gateway. Você pode acessar a documentação clicando no link **"Documentação das APIs (Swagger / OpenAPI)"** na **Página de Login**, no botão **"Swagger API Docs"** na **barra de cabeçalho superior do sistema**, ou diretamente pelas URLs abaixo:
+
+| Microsserviço | Stack | Especificação OpenAPI (JSON) | Interface Interativa (Swagger UI) |
+|---|---|---|---|
+| **Portal Unificado (Todos os Serviços)** | Swagger UI Standalone | — | [http://localhost:8080/swagger.html](http://localhost:8080/swagger.html) |
+| **1. `user-service`** | Java 21 / Spring Boot 3 (SpringDoc) | [http://localhost:8080/api/users/openapi.json](http://localhost:8080/api/users/openapi.json) | [Abrir no Portal Swagger](http://localhost:8080/swagger.html) |
+| **2. `event-service`** | Java 21 / Spring Boot 3 (SpringDoc) | [http://localhost:8080/api/events/openapi.json](http://localhost:8080/api/events/openapi.json) | [Abrir no Portal Swagger](http://localhost:8080/swagger.html) |
+| **3. `search-service`** | Python 3.12 / FastAPI | [http://localhost:8080/api/search/openapi.json](http://localhost:8080/api/search/openapi.json) | [http://localhost:8080/api/search/docs](http://localhost:8080/api/search/docs) |
+
+> **Dica de Autenticação no Swagger**: Para testar endpoints protegidos (`POST`, `PUT`, `PATCH`), faça login em `POST /api/users/login`, copie o `token` retornado e clique no botão **"Authorize"** no topo do Swagger UI.
 
 ### Contas Pré-Cadastradas (Seed Inicial)
 

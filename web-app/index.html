@@ -106,6 +106,18 @@
                             <i class="ri-user-add-line"></i>
                             Criar nova conta
                         </button>
+
+                        <div class="pt-3 border-t border-base-300 text-center">
+                            <a
+                                href="/swagger.html"
+                                target="_blank"
+                                class="inline-flex items-center gap-1.5 text-xs font-semibold text-indigo-600 hover:text-indigo-500 transition-colors"
+                            >
+                                <i class="ri-book-open-line text-sm"></i>
+                                <span>Documentação das APIs (Swagger / OpenAPI)</span>
+                                <i class="ri-external-link-line text-xs"></i>
+                            </a>
+                        </div>
                     </div>
                 </div>
 
@@ -281,6 +293,18 @@
                     </div>
 
                     <div class="flex items-center gap-3">
+                        <!-- Link para Documentação Swagger / OpenAPI -->
+                        <a
+                            href="/swagger.html"
+                            target="_blank"
+                            class="btn btn-sm btn-outline btn-primary gap-1.5"
+                            title="Abrir Documentação Interativa Swagger / OpenAPI dos Microsserviços"
+                        >
+                            <i class="ri-file-code-line text-base"></i>
+                            <span class="hidden sm:inline">Swagger API Docs</span>
+                            <i class="ri-external-link-line text-xs"></i>
+                        </a>
+
                         <!-- Notificações -->
                         <button @click="state.notificationDrawerOpen = true" class="btn btn-sm btn-ghost btn-circle indicator" title="Notificações">
                             <span class="indicator-item badge badge-xs badge-primary">{{ state.notifications.length }}</span>
@@ -848,6 +872,22 @@
                                         <h3 class="font-bold text-sm">{{ svc.name }}</h3>
                                         <p class="text-xs text-base-content/60 mt-0.5">{{ svc.stack }}</p>
                                     </div>
+                                    <div class="pt-2 border-t border-base-300 flex items-center justify-between gap-2">
+                                        <a
+                                            :href="svc.swaggerUrl"
+                                            target="_blank"
+                                            class="btn btn-xs btn-outline btn-primary gap-1"
+                                        >
+                                            <i class="ri-book-open-line"></i> Swagger UI
+                                        </a>
+                                        <a
+                                            :href="svc.openapiUrl"
+                                            target="_blank"
+                                            class="text-[11px] font-mono text-indigo-600 hover:underline"
+                                        >
+                                            openapi.json
+                                        </a>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -1079,9 +1119,9 @@
             <div class="w-full max-w-md bg-base-100 h-full shadow-2xl border-l border-base-300 flex flex-col">
                 <div class="p-4 border-b border-base-300 flex items-center justify-between">
                     <div class="flex items-center gap-2">
-                        <i class="ri-notification-badge-line text-indigo-600 text-xl"></i>
-                        <h3 class="font-bold text-base">Notificações</h3>
-                    </div>
+                        <i cla8"></script>
+    <script src="/js/store.js?v=8"></script>
+    <script src="/js/app.js?v=8
                     <button @click="state.notificationDrawerOpen = false" class="btn btn-sm btn-ghost btn-circle">
                         <i class="ri-close-line text-lg"></i>
                     </button>

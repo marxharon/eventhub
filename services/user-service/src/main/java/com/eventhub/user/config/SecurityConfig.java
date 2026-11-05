@@ -35,7 +35,14 @@ public class SecurityConfig {
                     "/api/users/health",
                     "/api/users/register",
                     "/api/users/login",
-                    "/api/users/demo-accounts"
+                    "/api/users/demo-accounts",
+                    "/api/users/openapi.json",
+                    "/api/users/openapi.json/**",
+                    "/api/users/docs",
+                    "/api/users/docs/**",
+                    "/api/users/swagger-ui/**",
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**"
                 ).permitAll()
                 .anyRequest().authenticated()
             )

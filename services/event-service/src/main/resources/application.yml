@@ -20,3 +20,11 @@ spring:
 eventhub:
   jwt:
     secret: ${JWT_SECRET:EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
+
+springdoc:
+  api-docs:
+    path: /api/events/openapi.json
+  swagger-ui:
+    path: /api/events/docs
+    url: /api/events/openapi.json
+

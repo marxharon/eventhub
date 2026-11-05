@@ -31,6 +31,8 @@ window.EventHubStore = {
                     stack: 'Java 21 / Spring Boot 3',
                     port: 8081,
                     healthUrl: '/api/users/health',
+                    swaggerUrl: '/swagger.html?urls.primaryName=1.%20user-service%20(Java%2021%20%2F%20Spring%20Boot%20%3A8081)',
+                    openapiUrl: '/api/users/openapi.json',
                     online: false,
                     status: 0,
                     latencyMs: 0
@@ -42,6 +44,8 @@ window.EventHubStore = {
                     stack: 'Java 21 / Spring Boot 3',
                     port: 8082,
                     healthUrl: '/api/events/health',
+                    swaggerUrl: '/swagger.html?urls.primaryName=2.%20event-service%20(Java%2021%20%2F%20Spring%20Boot%20%3A8082)',
+                    openapiUrl: '/api/events/openapi.json',
                     online: false,
                     status: 0,
                     latencyMs: 0
@@ -53,6 +57,8 @@ window.EventHubStore = {
                     stack: 'Python 3.12 / FastAPI',
                     port: 8083,
                     healthUrl: '/api/search/health',
+                    swaggerUrl: '/api/search/docs',
+                    openapiUrl: '/api/search/openapi.json',
                     online: false,
                     status: 0,
                     latencyMs: 0
@@ -64,6 +70,8 @@ window.EventHubStore = {
                     stack: 'Java 21 / Spring Boot 3',
                     port: 8084,
                     healthUrl: '/api/registrations/health',
+                    swaggerUrl: '/swagger.html?urls.primaryName=4.%20registration-service%20(Java%2021%20%2F%20Spring%20Boot%20%3A8084)',
+                    openapiUrl: '/api/registrations/openapi.json',
                     online: false,
                     status: 0,
                     latencyMs: 0
@@ -75,6 +83,8 @@ window.EventHubStore = {
                     stack: 'Python 3.12 / FastAPI',
                     port: 8085,
                     healthUrl: '/api/payments/health',
+                    swaggerUrl: '/api/payments/docs',
+                    openapiUrl: '/api/payments/openapi.json',
                     online: false,
                     status: 0,
                     latencyMs: 0
@@ -86,6 +96,8 @@ window.EventHubStore = {
                     stack: 'Python 3.12 / FastAPI',
                     port: 8086,
                     healthUrl: '/api/notifications/health',
+                    swaggerUrl: '/api/notifications/docs',
+                    openapiUrl: '/api/notifications/openapi.json',
                     online: false,
                     status: 0,
                     latencyMs: 0

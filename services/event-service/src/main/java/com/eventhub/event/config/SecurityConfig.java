@@ -25,7 +25,16 @@ public class SecurityConfig {
             .csrf(csrf -> csrf.disable())
             .sessionManagement(sm -> sm.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/events/health").permitAll()
+                .requestMatchers(
+                    "/api/events/health",
+                    "/api/events/openapi.json",
+                    "/api/events/openapi.json/**",
+                    "/api/events/docs",
+                    "/api/events/docs/**",
+                    "/api/events/swagger-ui/**",
+                    "/swagger-ui/**",
+                    "/v3/api-docs/**"
+                ).permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/**").permitAll()
                 .anyRequest().authenticated()
             )
