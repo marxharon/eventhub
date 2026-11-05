@@ -11,6 +11,12 @@ public class Activity {
     @Id
     private Long id;
 
+    @Column(name = "event_id", nullable = false)
+    private Long eventId;
+
+    @Column(nullable = false, length = 200)
+    private String title;
+
     @Column(nullable = false)
     private Integer capacity;
 
@@ -29,6 +35,10 @@ public class Activity {
     protected Activity() {}
 
     public Long getId() { return id; }
+
+    public Long getEventId() { return eventId; }
+
+    public String getTitle() { return title; }
 
     public Integer getCapacity() { return capacity; }
 

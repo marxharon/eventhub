@@ -30,4 +30,9 @@ public interface RegistrationRepository extends JpaRepository<Registration, Long
 
     @Query("select r.id from Registration r where r.status = :status and r.expiresAt < :now")
     List<Long> findExpiredIds(@Param("status") RegistrationStatus status, @Param("now") LocalDateTime now);
+
+    /** Contagem de inscrições por atividade e status para o relatório gerencial (RF11). */
+    @Query("select r.activityId, r.status, count(r) from Registration r " +
+           "where r.activityId in :activityIds group by r.activityId, r.status")
+    List<Object[]> countByActivityAndStatus(@Param("activityIds") Collection<Long> activityIds);
 }
