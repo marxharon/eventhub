@@ -19,7 +19,7 @@ A solução adota o padrão **API Gateway + Orquestração REST Síncrona com De
 | **3. `search-service`** | `services/search-service/` | Python 3.12 / FastAPI | `8083` | ✅ Implementado | Consulta otimizada de eventos publicados, programação detalhada, filtros por palavra-chave/gratuidade e cálculo de saldo de vagas em tempo real. |
 | **6. `notification-service`** | `services/notification-service/` | Python 3.12 / FastAPI | `8086` | ✅ Implementado | Envio e histórico de notificações com simulação de indisponibilidade (`503`) sem bloquear operações críticas. |
 | **5. `payment-service`** | `services/payment-service/` | Python 3.12 / FastAPI | `8085` | ✅ Implementado | Inicialização, confirmação, recusa e expiração de pagamentos simulados; webhook para `registration-service` e aviso resiliente ao `notification-service`. |
-| **4. `registration-service`** | `services/registration-service/` | Java 21 / Spring Boot 3 | `8084` | ⏳ Planejado (Passo 8) | Solicitação e cancelamento de inscrições, controle de concorrência (*lock* pessimista), lista de espera e relatórios gerenciais. |
+| **4. `registration-service`** | `services/registration-service/` | Java 21 / Spring Boot 3 | `8084` | ✅ Implementado (Passo 8) | Solicitação e cancelamento de inscrições, controle de concorrência (*lock* pessimista), lista de espera e relatórios gerenciais. |
 
 ---
 

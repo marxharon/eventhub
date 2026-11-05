@@ -1,0 +1,36 @@
+server:
+  port: 8084
+
+spring:
+  application:
+    name: registration-service
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:postgres}:5432/${POSTGRES_DB:eventhub_db}
+    username: ${POSTGRES_USER:eventhub}
+    password: ${POSTGRES_PASSWORD:eventhub_secret_2026}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: none
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+eventhub:
+  jwt:
+    secret: ${JWT_SECRET:EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
+  registration:
+    payment-window-minutes: ${PAYMENT_WINDOW_MINUTES:15}
+    expiration-check-ms: 60000
+  downstream:
+    payment-service-url: ${PAYMENT_SERVICE_URL:http://payment-service:8085}
+    notification-service-url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8086}
+    notification-timeout-ms: 1500
+
+springdoc:
+  api-docs:
+    path: /api/registrations/openapi.json
+  swagger-ui:
+    path: /api/registrations/docs
+    url: /api/registrations/openapi.json

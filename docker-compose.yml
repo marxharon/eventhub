@@ -158,6 +158,32 @@ services:
     networks:
       - eventhub-net
 
+  registration-service:
+    build:
+      context: ./services/registration-service
+      dockerfile: Dockerfile
+    container_name: eventhub-registration-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-eventhub_db}
+      POSTGRES_USER: ${POSTGRES_USER:-eventhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eventhub_secret_2026}
+      JWT_SECRET: ${JWT_SECRET:-EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
+      PAYMENT_SERVICE_URL: http://payment-service:8085
+      NOTIFICATION_SERVICE_URL: http://notification-service:8086
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8084/api/registrations/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - eventhub-net
+
 volumes:
   postgres_data:
 
