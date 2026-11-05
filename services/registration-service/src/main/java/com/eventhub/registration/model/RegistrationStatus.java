@@ -16,7 +16,7 @@ public enum RegistrationStatus {
         return ACTIVE.contains(this);
     }
 
-    /** Estados que ocupam uma vaga em occupied_slots (RN01). */
+    /** Estados que consomem capacidade: CONFIRMED (em occupied_slots) ou PENDING_PAYMENT (reserva). */
     public boolean holdsSlot() {
         return this == CONFIRMED || this == PENDING_PAYMENT;
     }

@@ -109,7 +109,10 @@ public class RegistrationService {
                 throw conflict("Inscrição não está aguardando pagamento.");
             }
             switch (result) {
-                case "APPROVED" -> reg.changeStatus(RegistrationStatus.CONFIRMED);
+                case "APPROVED" -> {
+                    reg.changeStatus(RegistrationStatus.CONFIRMED);
+                    locked.activity().setOccupiedSlots(locked.activity().getOccupiedSlots() + 1);
+                }
                 case "REFUSED" -> closeRegistration(locked.activity(), reg, RegistrationStatus.REFUSED);
                 case "EXPIRED" -> closeRegistration(locked.activity(), reg, RegistrationStatus.EXPIRED);
                 default -> throw new ResponseStatusException(HttpStatus.UNPROCESSABLE_ENTITY,
@@ -154,10 +157,12 @@ public class RegistrationService {
 
         RegistrationStatus status;
         LocalDateTime expiresAt = null;
-        if (activity.getOccupiedSlots() < activity.getCapacity()) {
-            activity.setOccupiedSlots(activity.getOccupiedSlots() + 1);
+        long reserved = activity.getOccupiedSlots()
+                + registrationRepository.countByActivityIdAndStatus(activityId, RegistrationStatus.PENDING_PAYMENT);
+        if (reserved < activity.getCapacity()) {
             if (activity.isFree()) {
                 status = RegistrationStatus.CONFIRMED;
+                activity.setOccupiedSlots(activity.getOccupiedSlots() + 1);
             } else {
                 status = RegistrationStatus.PENDING_PAYMENT;
                 expiresAt = LocalDateTime.now().plus(paymentWindow);
@@ -182,22 +187,25 @@ public class RegistrationService {
      * (RN04) ou devolve a vaga ao estoque. Requer atividade já bloqueada.
      */
     private void closeRegistration(Activity activity, Registration reg, RegistrationStatus newStatus) {
-        boolean holdsSlot = reg.getStatus().holdsSlot();
+        RegistrationStatus previous = reg.getStatus();
         reg.changeStatus(newStatus);
-        if (!holdsSlot) {
+        if (!previous.holdsSlot()) {
             return;
+        }
+        if (previous == RegistrationStatus.CONFIRMED) {
+            activity.setOccupiedSlots(activity.getOccupiedSlots() - 1);
         }
 
         Optional<Registration> next = registrationRepository
                 .findFirstByActivityIdAndStatusOrderByCreatedAtAscIdAsc(activity.getId(), RegistrationStatus.WAITLIST);
         if (next.isEmpty()) {
-            activity.setOccupiedSlots(activity.getOccupiedSlots() - 1);
             return;
         }
 
         Registration promoted = next.get();
         if (activity.isFree()) {
             promoted.changeStatus(RegistrationStatus.CONFIRMED);
+            activity.setOccupiedSlots(activity.getOccupiedSlots() + 1);
             external.notifyUser(promoted.getUserId(), "WAITLIST_PROMOTED",
                     "Uma vaga foi liberada e sua inscrição foi confirmada.");
             return;

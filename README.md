@@ -131,6 +131,7 @@ A aplicação inicia na **Tela de Login**. Utilize uma das contas abaixo (detalh
 - **[PLANO_PROJETO_EVENTHUB.md](PLANO_PROJETO_EVENTHUB.md)**: Plano completo do projeto, matriz de rastreabilidade (`RF`, `RN`, `RQ`) e roteiro de implementação incremental em 10 *baby steps* autocontidos.
 - **[design_arquitetural.md](design_arquitetural.md)**: Documento de *Architectural Design* contendo análise de domínio, limites de contexto (DDD), diagramas C4 (Contexto e Containers), matriz de propriedade de dados, contratos REST, fluxos de exceção e **4 ADRs** (*Architectural Decision Records*).
 - **[USUARIOS_INICIAIS.md](USUARIOS_INICIAIS.md)**: Guia rápido com os usuários iniciais para teste por perfil de acesso.
+- **[CASOS_DE_TESTE.md](CASOS_DE_TESTE.md)**: Casos de teste passo a passo para cada microsserviço, executados pela aplicação web (SPA), com resultados esperados e alternativas via Swagger ou Chaos Lab.
 
 ---
 
