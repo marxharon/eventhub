@@ -133,6 +133,31 @@ services:
     networks:
       - eventhub-net
 
+  payment-service:
+    build:
+      context: ./services/payment-service
+      dockerfile: Dockerfile
+    container_name: eventhub-payment-service
+    restart: unless-stopped
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-eventhub_db}
+      POSTGRES_USER: ${POSTGRES_USER:-eventhub}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eventhub_secret_2026}
+      REGISTRATION_SERVICE_URL: http://registration-service:8084
+      NOTIFICATION_SERVICE_URL: http://notification-service:8086
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8085/api/payments/health')"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - eventhub-net
+
 volumes:
   postgres_data:
 
