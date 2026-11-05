@@ -1,0 +1,58 @@
+from typing import List
+from fastapi import APIRouter, Depends, Query, status
+from sqlalchemy.orm import Session
+from app.config.database import get_db
+from app.schemas.notification_schema import (
+    NotificationSendRequest,
+    NotificationResponse,
+    FailureSimulationState,
+)
+from app.services.notification_service import NotificationService
+
+router = APIRouter(prefix="/api/notifications", tags=["Notifications (RF08, RN05)"])
+
+
+@router.get("/health")
+def health():
+    return {
+        "status": "UP",
+        "service": "notification-service",
+        "stack": "Python 3.12 / FastAPI",
+        "port": 8086,
+        "simulateFailure": NotificationService.get_failure_state(),
+        "requirements": ["RF08", "RN05", "RQ01", "RQ03"],
+    }
+
+
+@router.post("/send", response_model=NotificationResponse, status_code=status.HTTP_201_CREATED)
+def send_notification(
+    payload: NotificationSendRequest,
+    db: Session = Depends(get_db),
+):
+    service = NotificationService(db)
+    return service.send_notification(payload)
+
+
+@router.get("/user/{user_id}", response_model=List[NotificationResponse])
+def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
+    service = NotificationService(db)
+    return service.list_user_notifications(user_id)
+
+
+@router.get("", response_model=List[NotificationResponse])
+def list_all_notifications(db: Session = Depends(get_db)):
+    service = NotificationService(db)
+    return service.list_all_notifications()
+
+
+@router.get("/simulate-failure", response_model=FailureSimulationState)
+def get_failure_simulation_state():
+    fail = NotificationService.get_failure_state()
+    return NotificationService.set_failure_state(fail)
+
+
+@router.post("/simulate-failure", response_model=FailureSimulationState)
+def toggle_failure_simulation(
+    fail: bool = Query(..., description="Define se o serviço deve simular falha HTTP 503 (true/false)"),
+):
+    return NotificationService.set_failure_state(fail)
