@@ -46,6 +46,13 @@ createApp({
                 ]
             },
             {
+                title: 'Laboratório',
+                roles: ['ORGANIZER'],
+                items: [
+                    { id: 'chaos-lab', label: '⚡ Validação Arquitetural & Chaos Lab', icon: 'ri-flask-line' }
+                ]
+            },
+            {
                 title: 'Conta',
                 roles: ['ORGANIZER', 'PARTICIPANT'],
                 items: [
@@ -296,6 +303,18 @@ createApp({
             }
             if (viewId === 'explore-events') {
                 searchPublishedCatalog();
+            }
+            if (viewId === 'my-registrations') {
+                loadMyRegistrations();
+            }
+            if (viewId === 'payments-checkout') {
+                loadMyPayments();
+            }
+            if (viewId === 'my-certificates') {
+                loadMyCertificates();
+            }
+            if (viewId === 'organizer-analytics') {
+                loadAnalyticsReport();
             }
             state.activeView = viewId;
         }
@@ -671,6 +690,319 @@ createApp({
             }
         }
 
+        // =====================================================================
+        // UTILITÁRIOS DE STATUS
+        // =====================================================================
+        const STATUS_LABELS = {
+            CONFIRMED: 'Confirmada',
+            PENDING_PAYMENT: 'Aguardando pagamento',
+            WAITLIST: 'Lista de espera',
+            REFUSED: 'Recusada',
+            EXPIRED: 'Expirada',
+            CANCELLED: 'Cancelada',
+            PENDING: 'Pendente',
+            APPROVED: 'Aprovado',
+            ERROR: 'Erro'
+        };
+
+        function statusLabel(status) {
+            return STATUS_LABELS[status] || status || '—';
+        }
+
+        function statusBadgeClass(status) {
+            const map = {
+                CONFIRMED: 'badge-success',
+                APPROVED: 'badge-success',
+                PENDING_PAYMENT: 'badge-warning',
+                PENDING: 'badge-warning',
+                WAITLIST: 'badge-info',
+                REFUSED: 'badge-error',
+                ERROR: 'badge-error',
+                EXPIRED: 'badge-ghost',
+                CANCELLED: 'badge-ghost'
+            };
+            return map[status] || 'badge-ghost';
+        }
+
+        // =====================================================================
+        // PARTICIPANTE: INSCRIÇÕES, PAGAMENTOS E CERTIFICADOS
+        // =====================================================================
+        const myRegistrations = Vue.ref([]);
+        const myPayments = Vue.ref([]);
+        const myCertificates = Vue.ref([]);
+        const activityTitles = reactive({});
+        const isLoadingMyData = Vue.ref(false);
+        const certificateCode = Vue.ref('');
+        const certificateCheck = Vue.ref(null);
+
+        function activityTitle(activityId) {
+            return activityTitles[activityId] || `Atividade #${activityId}`;
+        }
+
+        async function resolveActivityTitles(ids) {
+            const missing = [...new Set(ids)].filter(id => id && !activityTitles[id]);
+            await Promise.all(missing.map(async (id) => {
+                const res = await window.EventHubAPI.request(`/api/search/activities/${id}`);
+                activityTitles[id] = res.ok && res.data && res.data.title ? res.data.title : `Atividade #${id}`;
+            }));
+        }
+
+        async function loadMyRegistrations() {
+            isLoadingMyData.value = true;
+            try {
+                const res = await window.EventHubAPI.request('/api/registrations/my');
+                myRegistrations.value = res.ok && Array.isArray(res.data) ? res.data : [];
+                await resolveActivityTitles(myRegistrations.value.map(r => r.activityId));
+            } finally {
+                isLoadingMyData.value = false;
+            }
+        }
+
+        async function cancelRegistration(reg) {
+            const confirmation = await Swal.fire({
+                title: 'Cancelar inscrição?',
+                text: `Inscrição em "${activityTitle(reg.activityId)}".`,
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, cancelar',
+                cancelButtonText: 'Voltar'
+            });
+            if (!confirmation.isConfirmed) return;
+
+            const res = await window.EventHubAPI.request(`/api/registrations/${reg.id}/cancel`, { method: 'PATCH' });
+            if (res.ok) {
+                Swal.fire({ icon: 'success', title: 'Inscrição cancelada.', timer: 1800, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Não foi possível cancelar', text: (res.data && res.data.message) || `HTTP ${res.status}` });
+            }
+            await loadMyRegistrations();
+        }
+
+        async function loadMyPayments() {
+            isLoadingMyData.value = true;
+            try {
+                await loadMyRegistrations();
+                const groups = await Promise.all(myRegistrations.value.map(async (reg) => {
+                    const res = await window.EventHubAPI.request(`/api/payments/registration/${reg.id}`);
+                    if (!res.ok || !Array.isArray(res.data)) return [];
+                    return res.data.map(p => ({ ...p, activityId: reg.activityId }));
+                }));
+                myPayments.value = groups.flat().sort((a, b) => b.id - a.id);
+            } finally {
+                isLoadingMyData.value = false;
+            }
+        }
+
+        async function simulatePaymentAction(payment, action) {
+            const verbs = { confirm: 'aprovado', refuse: 'recusado', expire: 'expirado' };
+            const res = await window.EventHubAPI.request(`/api/payments/${payment.id}/${action}`, { method: 'POST' });
+            if (res.ok) {
+                Swal.fire({ icon: 'success', title: `Pagamento ${verbs[action]}.`, timer: 1800, showConfirmButton: false });
+            } else {
+                Swal.fire({ icon: 'error', title: 'Operação não permitida', text: (res.data && res.data.message) || `HTTP ${res.status}` });
+            }
+            await loadMyPayments();
+        }
+
+        async function loadMyCertificates() {
+            const res = await window.EventHubAPI.request('/api/events/certificates/my');
+            myCertificates.value = res.ok && Array.isArray(res.data) ? res.data : [];
+        }
+
+        async function validateCertificate() {
+            const code = certificateCode.value.trim();
+            if (!code) return;
+            const res = await window.EventHubAPI.request(`/api/events/certificates/validate/${encodeURIComponent(code)}`);
+            certificateCheck.value = { ok: res.ok, status: res.status, data: res.data };
+        }
+
+        // =====================================================================
+        // ORGANIZADOR: CREDENCIAMENTO E RELATÓRIOS
+        // =====================================================================
+        const checkinForm = reactive({ registrationId: null });
+        const checkinHistory = Vue.ref([]);
+        const isCheckingIn = Vue.ref(false);
+        const analyticsEventId = Vue.ref(null);
+        const analyticsReport = Vue.ref(null);
+        const isLoadingReport = Vue.ref(false);
+        let analyticsChartInstance = null;
+
+        async function submitCheckin() {
+            const registrationId = Number(checkinForm.registrationId);
+            if (!registrationId) {
+                Swal.fire({ icon: 'warning', title: 'Informe o ID da inscrição.' });
+                return;
+            }
+            isCheckingIn.value = true;
+            try {
+                const res = await window.EventHubAPI.request('/api/events/attendance/check-in', {
+                    method: 'POST',
+                    body: JSON.stringify({ registrationId })
+                });
+                checkinHistory.value.unshift({
+                    time: new Date().toLocaleTimeString('pt-BR'),
+                    registrationId,
+                    ok: res.ok,
+                    httpStatus: res.status,
+                    message: res.ok
+                        ? `Presença registrada para a inscrição #${registrationId}.`
+                        : ((res.data && res.data.message) || `Falha (HTTP ${res.status}).`)
+                });
+                if (res.ok) checkinForm.registrationId = null;
+            } finally {
+                isCheckingIn.value = false;
+            }
+        }
+
+        async function loadAnalyticsReport() {
+            if (organizerEvents.value.length === 0) {
+                await loadOrganizerEvents();
+            }
+            if (!analyticsEventId.value && organizerEvents.value.length > 0) {
+                analyticsEventId.value = organizerEvents.value[0].id;
+            }
+            if (!analyticsEventId.value) {
+                analyticsReport.value = null;
+                return;
+            }
+            isLoadingReport.value = true;
+            try {
+                const res = await window.EventHubAPI.request(`/api/registrations/reports/event/${analyticsEventId.value}`);
+                analyticsReport.value = res.ok ? res.data : null;
+                await Vue.nextTick();
+                renderAnalyticsChart();
+            } finally {
+                isLoadingReport.value = false;
+            }
+        }
+
+        function renderAnalyticsChart() {
+            const canvas = document.getElementById('analytics-chart');
+            if (!canvas || !window.Chart || !analyticsReport.value) return;
+            if (analyticsChartInstance) analyticsChartInstance.destroy();
+            const acts = analyticsReport.value.activities || [];
+            analyticsChartInstance = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: acts.map(a => a.title),
+                    datasets: [
+                        { label: 'Confirmadas', data: acts.map(a => a.confirmed), backgroundColor: '#10b981' },
+                        { label: 'Aguardando pagamento', data: acts.map(a => a.pendingPayment), backgroundColor: '#f59e0b' },
+                        { label: 'Lista de espera', data: acts.map(a => a.waitlist), backgroundColor: '#3b82f6' },
+                        { label: 'Presenças', data: acts.map(a => a.attendances), backgroundColor: '#8b5cf6' }
+                    ]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        // =====================================================================
+        // LABORATÓRIO: VALIDAÇÃO ARQUITETURAL E CHAOS LAB
+        // =====================================================================
+        const labForm = reactive({ capacity: 10, requests: 20 });
+        const labRunning = Vue.ref(false);
+        const labLogs = Vue.ref([]);
+        const labConcurrency = Vue.ref(null);
+        const labNotification = Vue.ref(null);
+        const labPayment = Vue.ref(null);
+        const labChecksAll = computed(() => [
+            ...(labConcurrency.value ? labConcurrency.value.checks : []),
+            ...(labNotification.value ? labNotification.value.checks : []),
+            ...(labPayment.value ? labPayment.value.checks : [])
+        ]);
+        const labPassedCount = computed(() => labChecksAll.value.filter(c => c.passed).length);
+        let labLatencyChart = null;
+        let labDistributionChart = null;
+
+        function appendLabLog(level, message) {
+            labLogs.value.push({ time: new Date().toLocaleTimeString('pt-BR'), level, message });
+        }
+
+        function labTileClass(status) {
+            if (status === 'CONFIRMED') return 'bg-emerald-500 text-white';
+            if (status === 'WAITLIST') return 'bg-amber-400 text-white';
+            return 'bg-rose-500 text-white';
+        }
+
+        function renderLabCharts() {
+            const latencyCanvas = document.getElementById('lab-latency-chart');
+            const distributionCanvas = document.getElementById('lab-distribution-chart');
+            if (labLatencyChart) { labLatencyChart.destroy(); labLatencyChart = null; }
+            if (labDistributionChart) { labDistributionChart.destroy(); labDistributionChart = null; }
+            const conc = labConcurrency.value;
+            if (!window.Chart || !conc || !latencyCanvas || !distributionCanvas) return;
+
+            const colorOf = s => (s === 'CONFIRMED' ? '#10b981' : s === 'WAITLIST' ? '#f59e0b' : '#ef4444');
+            labLatencyChart = new Chart(latencyCanvas, {
+                type: 'bar',
+                data: {
+                    labels: conc.results.map(r => `#${r.index}`),
+                    datasets: [{
+                        label: 'Latência (ms)',
+                        data: conc.results.map(r => r.latencyMs),
+                        backgroundColor: conc.results.map(r => colorOf(r.status))
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false } } }
+            });
+
+            const count = s => conc.results.filter(r => r.status === s).length;
+            labDistributionChart = new Chart(distributionCanvas, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Confirmadas', 'Lista de espera', 'Erros'],
+                    datasets: [{
+                        data: [count('CONFIRMED'), count('WAITLIST'), count('ERROR')],
+                        backgroundColor: ['#10b981', '#f59e0b', '#ef4444']
+                    }]
+                },
+                options: { responsive: true, maintainAspectRatio: false }
+            });
+        }
+
+        async function runChaosLab() {
+            if (labRunning.value) return;
+            if (!window.EventHubLab) {
+                Swal.fire({ icon: 'error', title: 'Módulo do laboratório não carregado.' });
+                return;
+            }
+            labRunning.value = true;
+            labLogs.value = [];
+            labConcurrency.value = null;
+            labNotification.value = null;
+            labPayment.value = null;
+            const token = window.EventHubAPI.getToken();
+            try {
+                labConcurrency.value = await window.EventHubLab.runConcurrency({
+                    token,
+                    capacity: Number(labForm.capacity),
+                    requests: Number(labForm.requests),
+                    onLog: appendLabLog
+                });
+                labNotification.value = await window.EventHubLab.runNotificationFailure({
+                    token,
+                    eventId: labConcurrency.value.eventId,
+                    onLog: appendLabLog
+                });
+                labPayment.value = await window.EventHubLab.runPaymentRefusal({
+                    token,
+                    eventId: labConcurrency.value.eventId,
+                    onLog: appendLabLog
+                });
+                const allPassed = labChecksAll.value.every(c => c.passed);
+                appendLabLog(
+                    allPassed ? 'success' : 'error',
+                    `Laboratório concluído: ${labPassedCount.value} de ${labChecksAll.value.length} verificações aprovadas.`
+                );
+            } catch (error) {
+                appendLabLog('error', error.message);
+            } finally {
+                labRunning.value = false;
+                await Vue.nextTick();
+                renderLabCharts();
+            }
+        }
+
         async function loadInitialAuthenticatedData() {
             await checkAllHealth();
             await loadDemoAccounts();
@@ -749,7 +1081,41 @@ createApp({
             searchPublishedCatalog,
             clearSearchFilters,
             openParticipantEventDetails,
-            checkAllHealth
+            checkAllHealth,
+            myRegistrations,
+            myPayments,
+            myCertificates,
+            activityTitles,
+            isLoadingMyData,
+            certificateCode,
+            certificateCheck,
+            activityTitle,
+            statusLabel,
+            statusBadgeClass,
+            loadMyRegistrations,
+            cancelRegistration,
+            loadMyPayments,
+            simulatePaymentAction,
+            loadMyCertificates,
+            validateCertificate,
+            checkinForm,
+            checkinHistory,
+            isCheckingIn,
+            submitCheckin,
+            analyticsEventId,
+            analyticsReport,
+            isLoadingReport,
+            loadAnalyticsReport,
+            labForm,
+            labRunning,
+            labLogs,
+            labConcurrency,
+            labNotification,
+            labPayment,
+            labChecksAll,
+            labPassedCount,
+            labTileClass,
+            runChaosLab
         };
     }
 }).mount('#app');

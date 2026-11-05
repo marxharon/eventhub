@@ -1140,6 +1140,353 @@
                     <!-- ======================================================
                          DEMAIS TELAS (ATIVADAS NOS PASSOS 6 A 9)
                          ====================================================== -->
+                    <!-- ======================================================
+                         TELA 8: MINHAS INSCRIÇÕES (PARTICIPANTE)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'my-registrations'" class="space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <div>
+                                <h2 class="text-xl font-bold">Minhas Inscrições</h2>
+                                <p class="text-xs text-base-content/60 mt-0.5">Acompanhe o status de cada inscrição e cancele quando necessário.</p>
+                            </div>
+                            <button @click="loadMyRegistrations" class="btn btn-sm btn-primary gap-2" :disabled="isLoadingMyData">
+                                <i :class="['ri-refresh-line', isLoadingMyData ? 'animate-spin' : '']"></i>
+                                Atualizar
+                            </button>
+                        </div>
+
+                        <div v-if="myRegistrations.length === 0" class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-10 text-center text-sm text-base-content/60">
+                                Você ainda não possui inscrições.
+                            </div>
+                        </div>
+
+                        <div v-else class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                            <div v-for="reg in myRegistrations" :key="reg.id" class="card bg-base-100 border border-base-300 shadow-sm">
+                                <div class="card-body p-5 space-y-3">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <h3 class="font-bold text-sm leading-snug">{{ activityTitle(reg.activityId) }}</h3>
+                                        <span :class="['badge badge-sm', statusBadgeClass(reg.status)]">{{ statusLabel(reg.status) }}</span>
+                                    </div>
+                                    <div class="text-[11px] text-base-content/60 font-mono space-y-0.5">
+                                        <p>Inscrição #{{ reg.id }}</p>
+                                        <p>Criada em {{ reg.createdAt }}</p>
+                                        <p v-if="reg.expiresAt">Expira em {{ reg.expiresAt }}</p>
+                                    </div>
+                                    <div class="flex justify-end">
+                                        <button
+                                            v-if="['CONFIRMED', 'PENDING_PAYMENT', 'WAITLIST'].includes(reg.status)"
+                                            @click="cancelRegistration(reg)"
+                                            class="btn btn-xs btn-outline btn-error"
+                                        >
+                                            Cancelar inscrição
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 9: MEUS PAGAMENTOS (PARTICIPANTE, GATEWAY SIMULADO)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'payments-checkout'" class="space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <div>
+                                <h2 class="text-xl font-bold">Meus Pagamentos</h2>
+                                <p class="text-xs text-base-content/60 mt-0.5">
+                                    Cobranças das atividades pagas. Use as ações abaixo para simular a resposta do gateway de pagamento.
+                                </p>
+                            </div>
+                            <button @click="loadMyPayments" class="btn btn-sm btn-primary gap-2" :disabled="isLoadingMyData">
+                                <i :class="['ri-refresh-line', isLoadingMyData ? 'animate-spin' : '']"></i>
+                                Atualizar
+                            </button>
+                        </div>
+
+                        <div v-if="myPayments.length === 0" class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-10 text-center text-sm text-base-content/60">
+                                Nenhuma cobrança encontrada. Inscreva-se em uma atividade paga para gerar um pagamento.
+                            </div>
+                        </div>
+
+                        <div v-else class="card bg-base-100 border border-base-300 shadow-sm overflow-x-auto">
+                            <table class="table table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Pagamento</th>
+                                        <th>Atividade</th>
+                                        <th>Valor</th>
+                                        <th>Status</th>
+                                        <th class="text-right">Ações simuladas</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr v-for="p in myPayments" :key="p.id">
+                                        <td class="font-mono text-xs">#{{ p.id }}</td>
+                                        <td class="text-xs">{{ activityTitle(p.activityId) }}</td>
+                                        <td class="font-mono text-xs">{{ Number(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }}</td>
+                                        <td><span :class="['badge badge-sm', statusBadgeClass(p.status)]">{{ statusLabel(p.status) }}</span></td>
+                                        <td class="text-right">
+                                            <div v-if="p.status === 'PENDING'" class="flex justify-end gap-1">
+                                                <button @click="simulatePaymentAction(p, 'confirm')" class="btn btn-xs btn-success text-white">Aprovar</button>
+                                                <button @click="simulatePaymentAction(p, 'refuse')" class="btn btn-xs btn-error text-white">Recusar</button>
+                                                <button @click="simulatePaymentAction(p, 'expire')" class="btn btn-xs btn-outline">Expirar</button>
+                                            </div>
+                                            <span v-else class="text-[11px] text-base-content/50">Sem ações</span>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 10: MEUS CERTIFICADOS (PARTICIPANTE)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'my-certificates'" class="space-y-6">
+                        <div class="bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <h2 class="text-xl font-bold">Meus Certificados</h2>
+                            <p class="text-xs text-base-content/60 mt-0.5">Certificados emitidos para as atividades concluídas com presença registrada.</p>
+                        </div>
+
+                        <div v-if="myCertificates.length === 0" class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-10 text-center text-sm text-base-content/60">Nenhum certificado emitido até o momento.</div>
+                        </div>
+
+                        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div v-for="cert in myCertificates" :key="cert.id" class="card bg-base-100 border border-base-300 shadow-sm">
+                                <div class="card-body p-5 space-y-2">
+                                    <div class="flex items-center gap-2 text-amber-500">
+                                        <i class="ri-award-line text-xl"></i>
+                                        <h3 class="font-bold text-sm">{{ cert.activityTitle }}</h3>
+                                    </div>
+                                    <p class="text-[11px] text-base-content/60">Emitido em {{ cert.issuedAt }}</p>
+                                    <p class="font-mono text-xs bg-base-200 rounded-lg px-3 py-2 break-all">Código: {{ cert.validationCode }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-3">
+                                <h3 class="font-bold text-sm flex items-center gap-2"><i class="ri-shield-check-line text-indigo-600"></i> Validar um certificado</h3>
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <input v-model="certificateCode" type="text" placeholder="Código de validação" class="input input-sm input-bordered flex-1 font-mono" @keyup.enter="validateCertificate" />
+                                    <button @click="validateCertificate" class="btn btn-sm btn-primary">Validar</button>
+                                </div>
+                                <div
+                                    v-if="certificateCheck"
+                                    :class="['p-3 rounded-xl border text-xs', certificateCheck.ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30']"
+                                >
+                                    <p class="font-bold">{{ certificateCheck.ok ? 'Certificado válido' : 'Certificado não encontrado ou inválido' }} (HTTP {{ certificateCheck.status }})</p>
+                                    <p v-if="certificateCheck.ok" class="mt-1">{{ certificateCheck.data.activityTitle }} — emitido em {{ certificateCheck.data.issuedAt }}</p>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 11: CREDENCIAMENTO E CHECK-IN (ORGANIZADOR)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'checkin-terminal'" class="space-y-6">
+                        <div class="bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <h2 class="text-xl font-bold flex items-center gap-2"><i class="ri-qr-scan-2-line text-indigo-600"></i> Credenciamento & Check-in</h2>
+                            <p class="text-xs text-base-content/60 mt-0.5">Informe o ID da inscrição confirmada do participante para registrar a presença.</p>
+                        </div>
+
+                        <div class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-3">
+                                <div class="flex flex-col sm:flex-row gap-2">
+                                    <input v-model.number="checkinForm.registrationId" type="number" min="1" placeholder="ID da inscrição" class="input input-sm input-bordered flex-1" @keyup.enter="submitCheckin" />
+                                    <button @click="submitCheckin" class="btn btn-sm btn-primary gap-2" :disabled="isCheckingIn">
+                                        <i class="ri-user-follow-line"></i>
+                                        Registrar presença
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="checkinHistory.length" class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-6 space-y-2">
+                                <h3 class="font-bold text-sm">Últimos registros nesta sessão</h3>
+                                <div
+                                    v-for="(item, idx) in checkinHistory"
+                                    :key="idx"
+                                    :class="['flex items-center justify-between gap-3 p-3 rounded-xl border text-xs', item.ok ? 'bg-emerald-500/10 border-emerald-500/30' : 'bg-rose-500/10 border-rose-500/30']"
+                                >
+                                    <span>[{{ item.time }}] {{ item.message }}</span>
+                                    <span class="badge badge-sm font-mono">HTTP {{ item.httpStatus }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 12: RELATÓRIOS E INDICADORES (ORGANIZADOR)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'organizer-analytics'" class="space-y-6">
+                        <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
+                            <div>
+                                <h2 class="text-xl font-bold">Relatórios & Indicadores</h2>
+                                <p class="text-xs text-base-content/60 mt-0.5">Indicadores consolidados de inscrições, pagamentos e presenças por evento.</p>
+                            </div>
+                            <select v-model="analyticsEventId" @change="loadAnalyticsReport" class="select select-sm select-bordered w-full sm:w-72">
+                                <option v-for="ev in organizerEvents" :key="ev.id" :value="ev.id">{{ ev.title }}</option>
+                            </select>
+                        </div>
+
+                        <div v-if="!analyticsReport" class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-10 text-center text-sm text-base-content/60">
+                                {{ isLoadingReport ? 'Carregando relatório...' : 'Crie um evento para visualizar os indicadores.' }}
+                            </div>
+                        </div>
+
+                        <template v-else>
+                            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Inscrições</p><p class="text-xl font-bold">{{ analyticsReport.totals.registrations }}</p></div></div>
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Confirmadas</p><p class="text-xl font-bold text-emerald-600">{{ analyticsReport.totals.confirmed }}</p></div></div>
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Aguard. pagamento</p><p class="text-xl font-bold text-amber-500">{{ analyticsReport.totals.pendingPayment }}</p></div></div>
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Lista de espera</p><p class="text-xl font-bold text-sky-600">{{ analyticsReport.totals.waitlist }}</p></div></div>
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Canceladas</p><p class="text-xl font-bold">{{ analyticsReport.totals.cancelled }}</p></div></div>
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Presenças</p><p class="text-xl font-bold text-violet-600">{{ analyticsReport.totals.attendances }}</p></div></div>
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Receita</p><p class="text-base font-bold">{{ Number(analyticsReport.totals.revenue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }}</p></div></div>
+                            </div>
+
+                            <div class="card bg-base-100 border border-base-300 shadow-sm">
+                                <div class="card-body p-6 space-y-3">
+                                    <h3 class="font-bold text-sm">Ocupação por atividade</h3>
+                                    <div class="h-72"><canvas id="analytics-chart"></canvas></div>
+                                </div>
+                            </div>
+
+                            <div class="card bg-base-100 border border-base-300 shadow-sm overflow-x-auto">
+                                <table class="table table-sm">
+                                    <thead>
+                                        <tr>
+                                            <th>Atividade</th>
+                                            <th>Capacidade</th>
+                                            <th>Confirmadas</th>
+                                            <th>Pagamento pend.</th>
+                                            <th>Espera</th>
+                                            <th>Presenças</th>
+                                            <th>Receita</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr v-for="a in analyticsReport.activities" :key="a.activityId">
+                                            <td class="text-xs font-medium">{{ a.title }}</td>
+                                            <td class="font-mono text-xs">{{ a.confirmed }} / {{ a.capacity }}</td>
+                                            <td class="text-xs">{{ a.confirmed }}</td>
+                                            <td class="text-xs">{{ a.pendingPayment }}</td>
+                                            <td class="text-xs">{{ a.waitlist }}</td>
+                                            <td class="text-xs">{{ a.attendances }}</td>
+                                            <td class="font-mono text-xs">{{ Number(a.revenue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </template>
+                    </section>
+
+                    <!-- ======================================================
+                         TELA 13: VALIDAÇÃO ARQUITETURAL E CHAOS LAB (ORGANIZADOR)
+                         ====================================================== -->
+                    <section v-else-if="state.activeView === 'chaos-lab'" class="space-y-6">
+                        <div class="bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm space-y-4">
+                            <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+                                <div>
+                                    <h2 class="text-xl font-bold flex items-center gap-2">
+                                        <i class="ri-flask-line text-indigo-600"></i>
+                                        Validação Arquitetural & Chaos Lab
+                                    </h2>
+                                    <p class="text-xs text-base-content/60 mt-0.5">
+                                        Executa cenários reais contra os microsserviços pelo API Gateway e verifica as regras RN01 a RN05.
+                                    </p>
+                                </div>
+                                <div class="flex flex-wrap items-end gap-3">
+                                    <label class="form-control">
+                                        <span class="label-text text-xs font-bold">Capacidade da atividade</span>
+                                        <input v-model.number="labForm.capacity" type="number" min="1" max="100" :disabled="labRunning" class="input input-sm input-bordered w-44" />
+                                    </label>
+                                    <label class="form-control">
+                                        <span class="label-text text-xs font-bold">Inscrições simultâneas</span>
+                                        <input v-model.number="labForm.requests" type="number" min="2" max="200" :disabled="labRunning" class="input input-sm input-bordered w-44" />
+                                    </label>
+                                    <button @click="runChaosLab" class="btn btn-sm btn-primary gap-2" :disabled="labRunning">
+                                        <i :class="['ri-play-line', labRunning ? 'animate-pulse' : '']"></i>
+                                        {{ labRunning ? 'Executando...' : 'Executar laboratório' }}
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div v-if="labChecksAll.length" class="grid grid-cols-2 md:grid-cols-4 gap-3">
+                                <div class="p-3 rounded-xl bg-base-200/70"><p class="text-[10px] uppercase text-base-content/60">Verificações aprovadas</p><p class="text-xl font-bold">{{ labPassedCount }} / {{ labChecksAll.length }}</p></div>
+                                <div class="p-3 rounded-xl bg-base-200/70" v-if="labConcurrency"><p class="text-[10px] uppercase text-base-content/60">Confirmadas (RN01)</p><p class="text-xl font-bold text-emerald-600">{{ labConcurrency.kpis.confirmed }}</p></div>
+                                <div class="p-3 rounded-xl bg-base-200/70" v-if="labConcurrency"><p class="text-[10px] uppercase text-base-content/60">Lista de espera</p><p class="text-xl font-bold text-sky-600">{{ labConcurrency.kpis.waitlist }}</p></div>
+                                <div class="p-3 rounded-xl bg-base-200/70" v-if="labConcurrency"><p class="text-[10px] uppercase text-base-content/60">Duração do disparo</p><p class="text-xl font-bold">{{ labConcurrency.kpis.durationMs }} ms</p></div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+                            <div class="card bg-base-100 border border-base-300 shadow-sm">
+                                <div class="card-body p-5 space-y-3">
+                                    <h3 class="font-bold text-sm">Verificações</h3>
+                                    <p v-if="labChecksAll.length === 0" class="text-xs text-base-content/60">Execute o laboratório para ver os resultados.</p>
+                                    <ul v-else class="space-y-2">
+                                        <li v-for="(c, idx) in labChecksAll" :key="idx" class="flex items-start justify-between gap-3 p-3 rounded-xl border border-base-300">
+                                            <div>
+                                                <p class="text-xs font-bold">{{ c.name }}</p>
+                                                <p class="text-[11px] text-base-content/60">{{ c.detail }}</p>
+                                            </div>
+                                            <span :class="['badge badge-sm font-mono', c.passed ? 'badge-success' : 'badge-error']">{{ c.passed ? 'PASS' : 'FAIL' }}</span>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+
+                            <div class="card bg-base-100 border border-base-300 shadow-sm">
+                                <div class="card-body p-5 space-y-3">
+                                    <h3 class="font-bold text-sm">Registro do laboratório</h3>
+                                    <div class="bg-base-200 rounded-xl p-3 h-72 overflow-y-auto font-mono text-[11px] space-y-1">
+                                        <p v-if="labLogs.length === 0" class="text-base-content/50">Aguardando execução...</p>
+                                        <p
+                                            v-for="(l, idx) in labLogs"
+                                            :key="idx"
+                                            :class="{ 'text-emerald-600': l.level === 'success', 'text-rose-600': l.level === 'error', 'text-indigo-600': l.level === 'info' }"
+                                        >
+                                            <span class="opacity-60">[{{ l.time }}]</span> {{ l.message }}
+                                        </p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <template v-if="labConcurrency">
+                            <div class="card bg-base-100 border border-base-300 shadow-sm">
+                                <div class="card-body p-6 space-y-4">
+                                    <h3 class="font-bold text-sm">Concorrência (RN01): {{ labConcurrency.requests }} inscrições simultâneas em {{ labConcurrency.capacity }} vagas</h3>
+                                    <div class="grid grid-cols-5 md:grid-cols-10 gap-1">
+                                        <div
+                                            v-for="r in labConcurrency.results"
+                                            :key="r.index"
+                                            :class="['rounded-lg p-1.5 text-[10px] font-mono text-center', labTileClass(r.status)]"
+                                            :title="r.user + ' | HTTP ' + r.httpStatus + ' | ' + r.latencyMs + ' ms'"
+                                        >
+                                            #{{ r.index }}<br />{{ statusLabel(r.status) }}
+                                        </div>
+                                    </div>
+                                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                        <div class="h-56"><canvas id="lab-latency-chart"></canvas></div>
+                                        <div class="h-56"><canvas id="lab-distribution-chart"></canvas></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                    </section>
+
+                    <!-- ======================================================
+                         DEMAIS TELAS (ATIVADAS NOS PASSOS 6 A 9)
+                         ====================================================== -->
                     <section v-else class="card bg-base-100 border border-base-300 shadow-sm">
                         <div class="card-body p-10 text-center space-y-3">
                             <div class="w-14 h-14 rounded-2xl bg-indigo-600/10 text-indigo-600 flex items-center justify-center mx-auto text-2xl">
@@ -1212,6 +1559,7 @@
 
     <script src="/js/api.js?v=11"></script>
     <script src="/js/store.js?v=11"></script>
-    <script src="/js/app.js?v=11"></script>
+    <script src="/js/lab-runner.js?v=12"></script>
+    <script src="/js/app.js?v=12"></script>
 </body>
 </html>
