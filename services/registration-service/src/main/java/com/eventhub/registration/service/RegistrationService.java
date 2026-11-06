@@ -3,9 +3,11 @@ package com.eventhub.registration.service;
 import com.eventhub.registration.dto.PaymentWebhookRequest;
 import com.eventhub.registration.dto.RegistrationResponse;
 import com.eventhub.registration.model.Activity;
+import com.eventhub.registration.model.EventRef;
 import com.eventhub.registration.model.Registration;
 import com.eventhub.registration.model.RegistrationStatus;
 import com.eventhub.registration.repository.ActivityRepository;
+import com.eventhub.registration.repository.EventRefRepository;
 import com.eventhub.registration.repository.RegistrationRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,6 +31,7 @@ public class RegistrationService {
     private static final Logger log = LoggerFactory.getLogger(RegistrationService.class);
 
     private final ActivityRepository activityRepository;
+    private final EventRefRepository eventRefRepository;
     private final RegistrationRepository registrationRepository;
     private final ExternalIntegrationService external;
     private final TransactionTemplate transactions;
@@ -36,12 +39,14 @@ public class RegistrationService {
 
     public RegistrationService(
             ActivityRepository activityRepository,
+            EventRefRepository eventRefRepository,
             RegistrationRepository registrationRepository,
             ExternalIntegrationService external,
             TransactionTemplate transactions,
             @Value("${eventhub.registration.payment-window-minutes:15}") long paymentWindowMinutes
     ) {
         this.activityRepository = activityRepository;
+        this.eventRefRepository = eventRefRepository;
         this.registrationRepository = registrationRepository;
         this.external = external;
         this.transactions = transactions;
@@ -84,6 +89,7 @@ public class RegistrationService {
     }
 
     public RegistrationResponse cancel(Long userId, Long registrationId) {
+        final boolean[] hadPendingPayment = {false};
         transactions.executeWithoutResult(status -> {
             Locked locked = lockRegistration(registrationId);
             Registration reg = locked.registration();
@@ -93,8 +99,17 @@ public class RegistrationService {
             if (!reg.getStatus().isActive()) {
                 throw conflict("Inscrição não está ativa e não pode ser cancelada.");
             }
+            hadPendingPayment[0] = (reg.getStatus() == RegistrationStatus.PENDING_PAYMENT);
             closeRegistration(locked.activity(), reg, RegistrationStatus.CANCELLED);
+            external.notifyUser(
+                    userId,
+                    "REGISTRATION_CANCELLED",
+                    "Sua inscrição na atividade \"" + locked.activity().getTitle() + "\" foi cancelada com sucesso."
+            );
         });
+        if (hadPendingPayment[0]) {
+            external.cancelPendingPayment(registrationId, "EXPIRED");
+        }
         return toResponse(findRegistration(registrationId));
     }
 
@@ -137,6 +152,7 @@ public class RegistrationService {
                         closeRegistration(locked.activity(), reg, RegistrationStatus.EXPIRED);
                     }
                 });
+                external.cancelPendingPayment(id, "EXPIRED");
             } catch (RuntimeException ex) {
                 log.error("Falha ao expirar inscrição {}: {}", id, ex.getMessage());
             }
@@ -144,10 +160,47 @@ public class RegistrationService {
         return ids.size();
     }
 
+    /** Cancela todas as inscrições ativas das atividades de um evento e zera vagas ocupadas (RF02, RF05). */
+    public int cancelAllByEvent(Long eventId, Long authenticatedUserId, String authenticatedRole) {
+        EventRef event = eventRefRepository.findById(eventId)
+                .orElseThrow(() -> notFound("Evento não encontrado."));
+        if (authenticatedUserId != null) {
+            if (!"ORGANIZER".equals(authenticatedRole) || !event.getOrganizerId().equals(authenticatedUserId)) {
+                throw forbidden("RN07 Violada: Você só pode administrar eventos sob sua própria responsabilidade.");
+            }
+        }
+        List<Long> pendingPaymentRegIds = new java.util.ArrayList<>();
+        Integer count = transactions.execute(status -> {
+            int cancelled = 0;
+            List<Activity> activities = activityRepository.findByEventIdOrderByIdAsc(eventId);
+            for (Activity act : activities) {
+                Activity lockedAct = lockActivity(act.getId());
+                List<Registration> activeRegs = registrationRepository
+                        .findByActivityIdAndStatusIn(lockedAct.getId(), RegistrationStatus.ACTIVE);
+                for (Registration reg : activeRegs) {
+                    if (reg.getStatus() == RegistrationStatus.PENDING_PAYMENT) {
+                        pendingPaymentRegIds.add(reg.getId());
+                    }
+                    reg.changeStatus(RegistrationStatus.CANCELLED);
+                    cancelled++;
+                }
+                lockedAct.setOccupiedSlots(0);
+            }
+            return cancelled;
+        });
+        pendingPaymentRegIds.forEach(regId -> external.cancelPendingPayment(regId, "EXPIRED"));
+        return count != null ? count : 0;
+    }
+
     // ---- Regras de negócio (executadas dentro de transação) ----
 
     private Reservation reserve(Long userId, Long activityId) {
         Activity activity = lockActivity(activityId);
+        EventRef event = eventRefRepository.findById(activity.getEventId())
+                .orElseThrow(() -> notFound("Evento não encontrado."));
+        if (!"PUBLISHED".equals(event.getStatus())) {
+            throw conflict("Inscrições só são permitidas para eventos publicados (status atual: " + event.getStatus() + ").");
+        }
         if (Boolean.TRUE.equals(activity.getCompleted())) {
             throw conflict("Atividade já concluída.");
         }

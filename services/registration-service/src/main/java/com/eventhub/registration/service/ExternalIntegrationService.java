@@ -56,6 +56,18 @@ public class ExternalIntegrationService {
                 .toBodilessEntity();
     }
 
+    /** Encerra pagamentos PENDING associados a uma inscrição cancelada/expirada. Falhas não propagam. */
+    public void cancelPendingPayment(Long registrationId, String reasonStatus) {
+        try {
+            paymentClient.post()
+                    .uri(paymentServiceUrl + "/api/payments/registration/" + registrationId + "/cancel-pending?status=" + reasonStatus)
+                    .retrieve()
+                    .toBodilessEntity();
+        } catch (Exception ex) {
+            log.warn("Pagamento pendente da inscrição {} não encerrado remotamente: {}", registrationId, ex.getMessage());
+        }
+    }
+
     public void notifyUser(Long userId, String eventType, String message) {
         try {
             List<String> emails = jdbcTemplate.queryForList(

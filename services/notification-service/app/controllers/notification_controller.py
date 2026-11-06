@@ -1,6 +1,7 @@
-from typing import List
+from typing import Any, Dict, List
 from fastapi import APIRouter, Depends, Query, status
 from sqlalchemy.orm import Session
+from app.config.auth import get_current_user
 from app.config.database import get_db
 from app.schemas.notification_schema import (
     NotificationSendRequest,
@@ -21,7 +22,7 @@ def health():
         "stack": "Python 3.12 / FastAPI",
         "port": 8086,
         "simulateFailure": NotificationService.get_failure_state(),
-        "requirements": ["RF08", "RN05", "RQ01", "RQ03"],
+        "requirements": ["RF08", "RN05", "RN07", "RQ01", "RQ03", "RQ07"],
     }
 
 
@@ -35,33 +36,52 @@ def send_notification(
 
 
 @router.get("/user/{user_id}", response_model=List[NotificationResponse])
-def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
+def get_user_notifications(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     service = NotificationService(db)
-    return service.list_user_notifications(user_id)
+    return service.list_user_notifications(user_id, current_user=current_user)
 
 
 @router.get("", response_model=List[NotificationResponse])
-def list_all_notifications(db: Session = Depends(get_db)):
+def list_all_notifications(
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     service = NotificationService(db)
-    return service.list_all_notifications()
+    return service.list_all_notifications(current_user=current_user)
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationResponse)
-def mark_notification_as_read(notification_id: int, db: Session = Depends(get_db)):
+def mark_notification_as_read(
+    notification_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     service = NotificationService(db)
-    return service.mark_as_read(notification_id)
+    return service.mark_as_read(notification_id, current_user=current_user)
 
 
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_notification(notification_id: int, db: Session = Depends(get_db)):
+def delete_notification(
+    notification_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     service = NotificationService(db)
-    service.delete_notification(notification_id)
+    service.delete_notification(notification_id, current_user=current_user)
 
 
 @router.delete("/user/{user_id}/read", response_model=DeletedCountResponse)
-def delete_read_notifications(user_id: int, db: Session = Depends(get_db)):
+def delete_read_notifications(
+    user_id: int,
+    current_user: Dict[str, Any] = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
     service = NotificationService(db)
-    return service.delete_read_notifications(user_id)
+    return service.delete_read_notifications(user_id, current_user=current_user)
 
 
 @router.get("/simulate-failure", response_model=FailureSimulationState)

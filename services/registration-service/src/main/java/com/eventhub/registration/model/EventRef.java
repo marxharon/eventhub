@@ -18,6 +18,9 @@ public class EventRef {
     @Column(name = "organizer_id", nullable = false)
     private Long organizerId;
 
+    @Column(nullable = false, length = 30)
+    private String status;
+
     protected EventRef() {}
 
     public Long getId() { return id; }
@@ -25,4 +28,6 @@ public class EventRef {
     public String getTitle() { return title; }
 
     public Long getOrganizerId() { return organizerId; }
+
+    public String getStatus() { return status; }
 }

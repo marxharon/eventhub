@@ -98,6 +98,8 @@ public class ReportService {
         long pending = counts.getOrDefault(RegistrationStatus.PENDING_PAYMENT, 0L);
         long waitlist = counts.getOrDefault(RegistrationStatus.WAITLIST, 0L);
         long cancelled = counts.getOrDefault(RegistrationStatus.CANCELLED, 0L);
+        long refused = counts.getOrDefault(RegistrationStatus.REFUSED, 0L);
+        long expired = counts.getOrDefault(RegistrationStatus.EXPIRED, 0L);
         long total = counts.values().stream().mapToLong(Long::longValue).sum();
         long attendances = attendanceByActivity.getOrDefault(activity.getId(), 0L);
         BigDecimal revenue = activity.getPrice().multiply(BigDecimal.valueOf(confirmed));
@@ -111,13 +113,15 @@ public class ReportService {
                 pending,
                 waitlist,
                 cancelled,
+                refused,
+                expired,
                 attendances,
                 revenue
         );
     }
 
     private Totals sumTotals(List<ActivityReport> reports) {
-        long registrations = 0, confirmed = 0, pending = 0, waitlist = 0, cancelled = 0, attendances = 0;
+        long registrations = 0, confirmed = 0, pending = 0, waitlist = 0, cancelled = 0, refused = 0, expired = 0, attendances = 0;
         BigDecimal revenue = BigDecimal.ZERO;
         for (ActivityReport r : reports) {
             registrations += r.registrations();
@@ -125,13 +129,15 @@ public class ReportService {
             pending += r.pendingPayment();
             waitlist += r.waitlist();
             cancelled += r.cancelled();
+            refused += r.refused();
+            expired += r.expired();
             attendances += r.attendances();
             revenue = revenue.add(r.revenue());
         }
-        return new Totals(registrations, confirmed, pending, waitlist, cancelled, attendances, revenue);
+        return new Totals(registrations, confirmed, pending, waitlist, cancelled, refused, expired, attendances, revenue);
     }
 
     private Totals emptyTotals() {
-        return new Totals(0, 0, 0, 0, 0, 0, BigDecimal.ZERO);
+        return new Totals(0, 0, 0, 0, 0, 0, 0, 0, BigDecimal.ZERO);
     }
 }

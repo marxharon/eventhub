@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     postgres_db: str = os.getenv("POSTGRES_DB", "eventhub_db")
     postgres_user: str = os.getenv("POSTGRES_USER", "eventhub")
     postgres_password: str = os.getenv("POSTGRES_PASSWORD", "eventhub_secret_2026")
+    jwt_secret: str = os.getenv(
+        "JWT_SECRET",
+        "EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture",
+    )
     registration_service_url: str = os.getenv("REGISTRATION_SERVICE_URL", "http://registration-service:8084")
     notification_service_url: str = os.getenv("NOTIFICATION_SERVICE_URL", "http://notification-service:8086")
     downstream_timeout_seconds: float = 1.5

@@ -10,10 +10,11 @@ class SearchService:
     def __init__(self, db: Session):
         self.repository = SearchRepository(db)
 
-    @staticmethod
-    def _to_activity_schema(act: ActivityReadModel) -> ActivitySearchSchema:
+    def _to_activity_schema(self, act: ActivityReadModel) -> ActivitySearchSchema:
         price_val = float(act.price or 0.0)
-        available = max(0, int(act.capacity) - int(act.occupied_slots))
+        pending_count = self.repository.count_pending_payments_by_activity(act.id)
+        reserved_slots = min(int(act.capacity), int(act.occupied_slots) + pending_count)
+        available = max(0, int(act.capacity) - reserved_slots)
         return ActivitySearchSchema(
             id=act.id,
             eventId=act.event_id,
@@ -24,7 +25,7 @@ class SearchService:
             startTime=act.start_time,
             endTime=act.end_time,
             capacity=act.capacity,
-            occupiedSlots=act.occupied_slots,
+            occupiedSlots=reserved_slots,
             availableSlots=available,
             price=price_val,
             paid=price_val > 0.0,

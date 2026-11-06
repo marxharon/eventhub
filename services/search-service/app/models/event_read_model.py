@@ -33,3 +33,12 @@ class ActivityReadModel(Base):
     waitlist_enabled = Column(Boolean, nullable=False)
     completed = Column(Boolean, nullable=False)
     created_at = Column(DateTime, nullable=False)
+
+
+class RegistrationReadModel(Base):
+    __tablename__ = "registrations"
+
+    id = Column(BigInteger, primary_key=True, index=True)
+    activity_id = Column(BigInteger, ForeignKey("activities.id"), nullable=False)
+    status = Column(String(30), nullable=False)
+

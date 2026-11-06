@@ -564,16 +564,25 @@
                                                     </span>
                                                 </td>
                                                 <td>
-                                                    <span v-if="act.completed" class="badge badge-xs badge-success text-white gap-1">
-                                                        <i class="ri-check-double-line"></i> Concluída
-                                                    </span>
-                                                    <button
-                                                        v-else
-                                                        @click="markActivityCompleted(act.id)"
-                                                        class="btn btn-xs btn-outline btn-success"
-                                                    >
-                                                        Marcar Concluída
-                                                    </button>
+                                                    <div class="flex items-center gap-1.5">
+                                                        <button
+                                                            @click="openEditActivityScreen(selectedEvent, act)"
+                                                            class="btn btn-xs btn-ghost"
+                                                            title="Editar Atividade"
+                                                        >
+                                                            <i class="ri-edit-line"></i>
+                                                        </button>
+                                                        <span v-if="act.completed" class="badge badge-xs badge-success text-white gap-1">
+                                                            <i class="ri-check-double-line"></i> Concluída
+                                                        </span>
+                                                        <button
+                                                            v-else
+                                                            @click="markActivityCompleted(act.id)"
+                                                            class="btn btn-xs btn-outline btn-success"
+                                                        >
+                                                            Marcar Concluída
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                             <tr v-if="!selectedEvent.activities || selectedEvent.activities.length === 0">
@@ -598,7 +607,7 @@
                                 <div class="flex items-center justify-between border-b border-base-300 pb-4">
                                     <div>
                                         <p class="text-xs font-semibold text-indigo-600">{{ selectedEvent.title }}</p>
-                                        <h2 class="text-xl font-bold mt-0.5">Nova Atividade da Programação</h2>
+                                        <h2 class="text-xl font-bold mt-0.5">{{ editingActivityId ? 'Editar Atividade' : 'Nova Atividade da Programação' }}</h2>
                                         <p class="text-xs text-base-content/60 mt-0.5">
                                             Cadastre palestra, minicurso ou workshop definindo horário, local e regras de inscrição.
                                         </p>
@@ -721,7 +730,7 @@
                                             Cancelar
                                         </button>
                                         <button type="submit" class="btn btn-sm btn-primary gap-1.5">
-                                            <i class="ri-check-line"></i> Cadastrar Atividade
+                                            <i class="ri-check-line"></i> {{ editingActivityId ? 'Salvar Alterações' : 'Cadastrar Atividade' }}
                                         </button>
                                     </div>
                                 </form>
@@ -942,22 +951,52 @@
                     <section v-else-if="state.activeView === 'explore-events'" class="space-y-6">
                         <!-- Barra de Busca e Filtros -->
                         <div class="card bg-base-100 border border-base-300 shadow-sm">
-                            <div class="card-body p-5">
+                            <div class="card-body p-5 space-y-3">
+                                <div class="flex items-center justify-between flex-wrap gap-2">
+                                    <div class="tabs tabs-boxed bg-base-200 p-1">
+                                        <a
+                                            @click="searchFilters.searchMode = 'EVENTS'; searchPublishedCatalog()"
+                                            :class="['tab tab-sm gap-1.5', searchFilters.searchMode === 'EVENTS' ? 'tab-active font-bold' : '']"
+                                        >
+                                            <i class="ri-calendar-event-line"></i> Eventos
+                                        </a>
+                                        <a
+                                            @click="searchFilters.searchMode = 'ACTIVITIES'; searchPublishedCatalog()"
+                                            :class="['tab tab-sm gap-1.5', searchFilters.searchMode === 'ACTIVITIES' ? 'tab-active font-bold' : '']"
+                                        >
+                                            <i class="ri-slideshow-line"></i> Atividades da Programação
+                                        </a>
+                                    </div>
+                                </div>
                                 <form @submit.prevent="searchPublishedCatalog" class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-                                    <div class="form-control md:col-span-5">
-                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Buscar Evento ou Organização</span></label>
+                                    <div class="form-control md:col-span-3">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Palavra-chave</span></label>
                                         <div class="relative">
                                             <i class="ri-search-line absolute left-3 top-2.5 text-base-content/40"></i>
                                             <input
                                                 v-model="searchFilters.keyword"
                                                 type="text"
-                                                placeholder="Ex.: Congresso, Arquitetura, IA..."
+                                                placeholder="Título, palestrante, local..."
                                                 class="input input-bordered input-sm w-full pl-9"
                                             />
                                         </div>
                                     </div>
 
                                     <div class="form-control md:col-span-3">
+                                        <label class="label py-1"><span class="label-text text-xs font-semibold">Organização</span></label>
+                                        <div class="relative">
+                                            <i class="ri-building-line absolute left-3 top-2.5 text-base-content/40"></i>
+                                            <input
+                                                v-model="searchFilters.organization"
+                                                type="text"
+                                                placeholder="Ex.: SBC, IEEE..."
+                                                class="input input-bordered input-sm w-full pl-9"
+                                                :disabled="searchFilters.searchMode === 'ACTIVITIES'"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    <div class="form-control md:col-span-2">
                                         <label class="label py-1"><span class="label-text text-xs font-semibold">Modalidade de Inscrição</span></label>
                                         <select v-model="searchFilters.priceFilter" @change="searchPublishedCatalog" class="select select-bordered select-sm w-full">
                                             <option value="ALL">Todas as atividades</option>
@@ -990,8 +1029,83 @@
                             </div>
                         </div>
 
+                        <!-- Vitrine Direta de Atividades da Programação -->
+                        <div v-if="searchFilters.searchMode === 'ACTIVITIES'" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div
+                                v-for="act in searchedActivities"
+                                :key="'srch-act-' + act.id"
+                                class="card bg-base-100 border border-base-300 shadow-sm"
+                            >
+                                <div class="card-body p-5 flex flex-col justify-between gap-4">
+                                    <div class="space-y-2">
+                                        <div class="flex items-center justify-between gap-2">
+                                            <span :class="['badge badge-sm font-semibold', act.paid ? 'badge-secondary' : 'badge-accent']">
+                                                {{ act.paid ? 'R$ ' + Number(act.price).toFixed(2) : 'Gratuita' }}
+                                            </span>
+                                            <span
+                                                :class="[
+                                                    'badge badge-xs font-semibold',
+                                                    act.availableSlots > 0 ? 'badge-success text-white' : (act.waitlistEnabled ? 'badge-info text-white' : 'badge-error text-white')
+                                                ]"
+                                            >
+                                                {{ act.availableSlots > 0 ? act.availableSlots + ' vaga(s) disponível(is)' : (act.waitlistEnabled ? 'Lista de Espera Aberta' : 'Esgotada') }}
+                                            </span>
+                                        </div>
+                                        <h4 class="font-bold text-base">{{ act.title }}</h4>
+                                        <p class="text-xs text-base-content/70">{{ act.description }}</p>
+                                        <div class="pt-2 space-y-1 text-xs text-base-content/60">
+                                            <div><i class="ri-user-voice-line mr-1.5 text-indigo-600"></i> <strong>Palestrante:</strong> {{ act.speaker }}</div>
+                                            <div><i class="ri-map-pin-line mr-1.5 text-indigo-600"></i> <strong>Local:</strong> {{ act.location }}</div>
+                                            <div><i class="ri-calendar-schedule-line mr-1.5 text-indigo-600"></i> <strong>Horário:</strong> {{ act.startTime }} até {{ act.endTime }}</div>
+                                        </div>
+                                    </div>
+                                    <div class="pt-3 border-t border-base-300 space-y-2">
+                                        <div class="flex items-center justify-between text-xs">
+                                            <span class="text-base-content/60">Ocupação da Atividade</span>
+                                            <span class="font-mono font-bold">{{ act.occupiedSlots }} / {{ act.capacity }} vagas</span>
+                                        </div>
+                                        <button
+                                            v-if="!act.completed && act.availableSlots > 0"
+                                            @click="registerInActivity(act)"
+                                            :disabled="isRegisteringActivity"
+                                            class="btn btn-sm btn-primary w-full gap-2"
+                                        >
+                                            <i class="ri-ticket-2-line"></i>
+                                            {{ isRegisteringActivity ? 'Processando...' : 'Inscrever-se nesta atividade' }}
+                                        </button>
+                                        <button
+                                            v-else-if="!act.completed && act.availableSlots === 0 && act.waitlistEnabled"
+                                            @click="registerInActivity(act)"
+                                            :disabled="isRegisteringActivity"
+                                            class="btn btn-sm btn-info text-white w-full gap-2"
+                                        >
+                                            <i class="ri-time-line"></i>
+                                            {{ isRegisteringActivity ? 'Processando...' : 'Entrar na Lista de Espera' }}
+                                        </button>
+                                        <button
+                                            v-else
+                                            disabled
+                                            class="btn btn-sm btn-disabled w-full gap-2"
+                                        >
+                                            <i class="ri-forbid-2-line"></i>
+                                            {{ act.completed ? 'Atividade Concluída' : 'Vagas Esgotadas' }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div
+                                v-if="!isSearchingCatalog && searchedActivities.length === 0"
+                                class="md:col-span-2 card bg-base-100 border border-base-300 shadow-sm"
+                            >
+                                <div class="card-body p-10 text-center text-base-content/60">
+                                    <i class="ri-slideshow-line text-3xl mb-2"></i>
+                                    <p class="text-sm font-semibold">Nenhuma atividade encontrada para os filtros informados.</p>
+                                </div>
+                            </div>
+                        </div>
+
                         <!-- Vitrine de Eventos Publicados -->
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div v-else class="grid grid-cols-1 md:grid-cols-2 gap-5">
                             <div
                                 v-for="ev in publishedEventsCatalog"
                                 :key="'pub-' + ev.id"
@@ -1131,13 +1245,30 @@
                                                 :max="act.capacity"
                                             ></progress>
                                             <button
-                                                v-if="act.availableSlots > 0"
+                                                v-if="!act.completed && act.availableSlots > 0"
                                                 @click="registerInActivity(act)"
                                                 :disabled="isRegisteringActivity"
                                                 class="btn btn-sm btn-primary w-full gap-2"
                                             >
                                                 <i class="ri-ticket-2-line"></i>
                                                 {{ isRegisteringActivity ? 'Processando...' : 'Inscrever-se nesta atividade' }}
+                                            </button>
+                                            <button
+                                                v-else-if="!act.completed && act.availableSlots === 0 && act.waitlistEnabled"
+                                                @click="registerInActivity(act)"
+                                                :disabled="isRegisteringActivity"
+                                                class="btn btn-sm btn-info text-white w-full gap-2"
+                                            >
+                                                <i class="ri-time-line"></i>
+                                                {{ isRegisteringActivity ? 'Processando...' : 'Entrar na Lista de Espera' }}
+                                            </button>
+                                            <button
+                                                v-else
+                                                disabled
+                                                class="btn btn-sm btn-disabled w-full gap-2"
+                                            >
+                                                <i class="ri-forbid-2-line"></i>
+                                                {{ act.completed ? 'Atividade Concluída' : 'Vagas Esgotadas' }}
                                             </button>
                                         </div>
                                     </div>
@@ -1182,7 +1313,20 @@
                                         <p>Criada em {{ reg.createdAt }}</p>
                                         <p v-if="reg.expiresAt">Expira em {{ reg.expiresAt }}</p>
                                     </div>
-                                    <div class="flex justify-end">
+                                    <div class="flex flex-wrap justify-end gap-1.5">
+                                        <button
+                                            @click="viewRegistrationDetails(reg)"
+                                            class="btn btn-xs btn-ghost gap-1"
+                                        >
+                                            <i class="ri-eye-line"></i> Detalhes
+                                        </button>
+                                        <button
+                                            v-if="reg.status === 'CONFIRMED'"
+                                            @click="issueCertificateForActivity(reg.activityId)"
+                                            class="btn btn-xs btn-outline btn-primary gap-1"
+                                        >
+                                            <i class="ri-award-line"></i> Emitir certificado
+                                        </button>
                                         <button
                                             v-if="['CONFIRMED', 'PENDING_PAYMENT', 'WAITLIST'].includes(reg.status)"
                                             @click="cancelRegistration(reg)"
@@ -1257,6 +1401,29 @@
                         <div class="bg-base-100 p-5 rounded-2xl border border-base-300 shadow-sm">
                             <h2 class="text-xl font-bold">Meus Certificados</h2>
                             <p class="text-xs text-base-content/60 mt-0.5">Certificados emitidos para as atividades concluídas com presença registrada.</p>
+                        </div>
+
+                        <div v-if="myRegistrations.filter(r => r.status === 'CONFIRMED').length > 0" class="card bg-base-100 border border-base-300 shadow-sm">
+                            <div class="card-body p-5 space-y-3">
+                                <h3 class="font-bold text-sm flex items-center gap-2">
+                                    <i class="ri-file-certificate-line text-indigo-600"></i> Solicitar emissão por atividade inscrita (RN06)
+                                </h3>
+                                <div class="divide-y divide-base-200">
+                                    <div
+                                        v-for="reg in myRegistrations.filter(r => r.status === 'CONFIRMED')"
+                                        :key="reg.id"
+                                        class="py-2.5 flex items-center justify-between gap-3"
+                                    >
+                                        <span class="text-xs font-medium">{{ activityTitle(reg.activityId) }}</span>
+                                        <button
+                                            @click="issueCertificateForActivity(reg.activityId)"
+                                            class="btn btn-xs btn-outline btn-primary gap-1"
+                                        >
+                                            <i class="ri-award-line"></i> Emitir certificado
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
 
                         <div v-if="myCertificates.length === 0" class="card bg-base-100 border border-base-300 shadow-sm">
@@ -1401,12 +1568,13 @@
                         </div>
 
                         <template v-else>
-                            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+                            <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-8 gap-3">
                                 <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Inscrições</p><p class="text-xl font-bold">{{ analyticsReport.totals.registrations }}</p></div></div>
                                 <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Confirmadas</p><p class="text-xl font-bold text-emerald-600">{{ analyticsReport.totals.confirmed }}</p></div></div>
                                 <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Aguard. pagamento</p><p class="text-xl font-bold text-amber-500">{{ analyticsReport.totals.pendingPayment }}</p></div></div>
                                 <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Lista de espera</p><p class="text-xl font-bold text-sky-600">{{ analyticsReport.totals.waitlist }}</p></div></div>
                                 <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Canceladas</p><p class="text-xl font-bold">{{ analyticsReport.totals.cancelled }}</p></div></div>
+                                <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Recus. / Expir.</p><p class="text-xl font-bold text-rose-500">{{ (analyticsReport.totals.refused || 0) + (analyticsReport.totals.expired || 0) }}</p></div></div>
                                 <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Presenças</p><p class="text-xl font-bold text-violet-600">{{ analyticsReport.totals.attendances }}</p></div></div>
                                 <div class="card bg-base-100 border border-base-300 shadow-sm"><div class="card-body p-4"><p class="text-[10px] uppercase text-base-content/60">Receita</p><p class="text-base font-bold">{{ Number(analyticsReport.totals.revenue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }}</p></div></div>
                             </div>
@@ -1427,6 +1595,8 @@
                                             <th>Confirmadas</th>
                                             <th>Pagamento pend.</th>
                                             <th>Espera</th>
+                                            <th>Canceladas</th>
+                                            <th>Recus./Expir.</th>
                                             <th>Presenças</th>
                                             <th>Receita</th>
                                         </tr>
@@ -1438,6 +1608,8 @@
                                             <td class="text-xs">{{ a.confirmed }}</td>
                                             <td class="text-xs">{{ a.pendingPayment }}</td>
                                             <td class="text-xs">{{ a.waitlist }}</td>
+                                            <td class="text-xs">{{ a.cancelled }}</td>
+                                            <td class="text-xs">{{ (a.refused || 0) + (a.expired || 0) }}</td>
                                             <td class="text-xs">{{ a.attendances }}</td>
                                             <td class="font-mono text-xs">{{ Number(a.revenue).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }}</td>
                                         </tr>

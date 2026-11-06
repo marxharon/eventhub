@@ -43,6 +43,28 @@ class PaymentRepository:
         self.db.refresh(payment)
         return payment
 
+    def cancel_pending_by_registration(self, registration_id: int, new_status: str = "EXPIRED") -> int:
+        pending_items = (
+            self.db.query(PaymentModel)
+            .filter(
+                PaymentModel.registration_id == registration_id,
+                PaymentModel.status == "PENDING",
+            )
+            .all()
+        )
+        for item in pending_items:
+            item.status = new_status
+        if pending_items:
+            self.db.commit()
+        return len(pending_items)
+
+    def find_registration_user_id(self, registration_id: int) -> Optional[int]:
+        val = self.db.execute(
+            text("SELECT user_id FROM registrations WHERE id = :reg_id"),
+            {"reg_id": registration_id},
+        ).scalar()
+        return int(val) if val is not None else None
+
     def find_user_email(self, user_id: int) -> Optional[str]:
         return self.db.execute(
             text("SELECT email FROM users WHERE id = :user_id"), {"user_id": user_id}

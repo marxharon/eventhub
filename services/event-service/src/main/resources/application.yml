@@ -21,6 +21,7 @@ eventhub:
   jwt:
     secret: ${JWT_SECRET:EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
   downstream:
+    registration-service-url: ${REGISTRATION_SERVICE_URL:http://registration-service:8084}
     notification-service-url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8086}
     notification-timeout-ms: 1500
 

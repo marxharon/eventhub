@@ -17,6 +17,8 @@ public record OrganizerReportDTO(
             long pendingPayment,
             long waitlist,
             long cancelled,
+            long refused,
+            long expired,
             long attendances,
             BigDecimal revenue
     ) {}
@@ -30,6 +32,8 @@ public record OrganizerReportDTO(
             long pendingPayment,
             long waitlist,
             long cancelled,
+            long refused,
+            long expired,
             long attendances,
             BigDecimal revenue
     ) {}

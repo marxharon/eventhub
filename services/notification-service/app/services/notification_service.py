@@ -61,11 +61,25 @@ class NotificationService:
         )
         return self._to_schema(saved)
 
-    def list_user_notifications(self, user_id: int) -> List[NotificationResponse]:
+    def list_user_notifications(self, user_id: int, current_user: dict | None = None) -> List[NotificationResponse]:
+        if (
+            current_user is not None
+            and current_user.get("role") != "ORGANIZER"
+            and int(user_id) != int(current_user["userId"])
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="RN07 Violada: Participantes podem consultar apenas suas próprias notificações.",
+            )
         items = self.repository.find_by_user(user_id)
         return [self._to_schema(item) for item in items]
 
-    def list_all_notifications(self) -> List[NotificationResponse]:
+    def list_all_notifications(self, current_user: dict | None = None) -> List[NotificationResponse]:
+        if current_user is not None and current_user.get("role") != "ORGANIZER":
+            raise HTTPException(
+                status_code=403,
+                detail="RN07 Violada: Apenas organizadores podem listar todas as notificações.",
+            )
         items = self.repository.find_all()
         return [self._to_schema(item) for item in items]
 
@@ -75,14 +89,32 @@ class NotificationService:
             raise HTTPException(status_code=404, detail=f"Notificação {notification_id} não encontrada.")
         return notification
 
-    def mark_as_read(self, notification_id: int) -> NotificationResponse:
+    def mark_as_read(self, notification_id: int, current_user: dict | None = None) -> NotificationResponse:
         notification = self._get_or_404(notification_id)
+        if (
+            current_user is not None
+            and current_user.get("role") != "ORGANIZER"
+            and int(notification.user_id) != int(current_user["userId"])
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="RN07 Violada: Participantes podem alterar apenas suas próprias notificações.",
+            )
         if not notification.is_read:
             notification = self.repository.mark_as_read(notification)
         return self._to_schema(notification)
 
-    def delete_notification(self, notification_id: int) -> None:
+    def delete_notification(self, notification_id: int, current_user: dict | None = None) -> None:
         notification = self._get_or_404(notification_id)
+        if (
+            current_user is not None
+            and current_user.get("role") != "ORGANIZER"
+            and int(notification.user_id) != int(current_user["userId"])
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="RN07 Violada: Participantes podem excluir apenas suas próprias notificações.",
+            )
         if not notification.is_read:
             raise HTTPException(
                 status_code=409,
@@ -90,5 +122,14 @@ class NotificationService:
             )
         self.repository.delete(notification)
 
-    def delete_read_notifications(self, user_id: int) -> DeletedCountResponse:
+    def delete_read_notifications(self, user_id: int, current_user: dict | None = None) -> DeletedCountResponse:
+        if (
+            current_user is not None
+            and current_user.get("role") != "ORGANIZER"
+            and int(user_id) != int(current_user["userId"])
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="RN07 Violada: Participantes podem excluir apenas suas próprias notificações.",
+            )
         return DeletedCountResponse(deleted=self.repository.delete_read_by_user(user_id))

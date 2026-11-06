@@ -6,6 +6,7 @@ import com.eventhub.event.model.Activity;
 import com.eventhub.event.model.Event;
 import com.eventhub.event.repository.ActivityRepository;
 import com.eventhub.event.repository.AttendanceRepository;
+import com.eventhub.event.repository.RegistrationRefRepository;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,17 +21,23 @@ public class ActivityService {
 
     private final ActivityRepository activityRepository;
     private final AttendanceRepository attendanceRepository;
+    private final RegistrationRefRepository registrationRefRepository;
+    private final NotificationClient notificationClient;
     private final EventService eventService;
     private final CertificateService certificateService;
 
     public ActivityService(
             ActivityRepository activityRepository,
             AttendanceRepository attendanceRepository,
+            RegistrationRefRepository registrationRefRepository,
+            NotificationClient notificationClient,
             EventService eventService,
             CertificateService certificateService
     ) {
         this.activityRepository = activityRepository;
         this.attendanceRepository = attendanceRepository;
+        this.registrationRefRepository = registrationRefRepository;
+        this.notificationClient = notificationClient;
         this.eventService = eventService;
         this.certificateService = certificateService;
     }
@@ -106,6 +113,13 @@ public class ActivityService {
         activity.setWaitlistEnabled(request.getWaitlistEnabled() != null ? request.getWaitlistEnabled() : true);
 
         Activity saved = activityRepository.save(activity);
+        registrationRefRepository.findActiveUserIdsByActivityId(activityId).forEach(uid ->
+                notificationClient.notifyUser(
+                        uid,
+                        "ACTIVITY_UPDATED",
+                        "A atividade \"" + saved.getTitle() + "\" teve informações (horário/local) atualizadas."
+                )
+        );
         return ActivityResponse.fromEntity(saved);
     }
 

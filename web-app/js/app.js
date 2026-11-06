@@ -133,6 +133,7 @@ createApp({
             price: 0,
             waitlistEnabled: true
         });
+        const editingActivityId = Vue.ref(null);
 
         // Estado da Tela de Validadores
         const demoAccounts = Vue.ref([]);
@@ -223,12 +224,13 @@ createApp({
 
         async function registerInActivity(act) {
             if (!state.currentUser) return;
+            const isWaitlistAttempt = act.availableSlots <= 0 && act.waitlistEnabled;
             const confirmation = await Swal.fire({
-                title: 'Confirmar inscrição?',
+                title: isWaitlistAttempt ? 'Entrar na lista de espera?' : 'Confirmar inscrição?',
                 text: `Atividade "${act.title}"${act.paid ? ` (R$ ${Number(act.price).toFixed(2)})` : ' (gratuita)'}.`,
                 icon: 'question',
                 showCancelButton: true,
-                confirmButtonText: 'Sim, inscrever-me',
+                confirmButtonText: isWaitlistAttempt ? 'Sim, entrar na fila' : 'Sim, inscrever-me',
                 cancelButtonText: 'Voltar'
             });
             if (!confirmation.isConfirmed) return;
@@ -240,16 +242,28 @@ createApp({
                     body: JSON.stringify({ activityId: act.id })
                 });
                 if (res.ok) {
-                    const pending = res.data && res.data.status === 'PENDING_PAYMENT';
+                    const st = res.data && res.data.status;
+                    const titleMap = {
+                        PENDING_PAYMENT: 'Inscrição criada: aguardando pagamento',
+                        WAITLIST: 'Incluído na Lista de Espera!',
+                        CONFIRMED: 'Inscrição confirmada!'
+                    };
+                    const textMap = {
+                        PENDING_PAYMENT: 'Um pagamento em aberto foi gerado em "Meus Pagamentos". A vaga será confirmada somente após a aprovação do pagamento.',
+                        WAITLIST: 'Você entrou na fila de espera e será promovido automaticamente caso uma vaga seja liberada (RN04).',
+                        CONFIRMED: 'Sua vaga foi garantida e você foi notificado sobre sua inscrição.'
+                    };
                     Swal.fire({
                         icon: 'success',
-                        title: pending ? 'Inscrição criada: aguardando pagamento' : 'Inscrição confirmada!',
-                        text: pending
-                            ? 'Um pagamento em aberto foi gerado em "Meus Pagamentos". A vaga será confirmada somente após a aprovação do pagamento.'
-                            : 'Você foi notificado sobre sua inscrição.'
+                        title: titleMap[st] || 'Inscrição registrada!',
+                        text: textMap[st] || ''
                     });
                     await loadUserNotifications();
                     await loadMyRegistrations();
+                    await searchPublishedCatalog();
+                    if (selectedCatalogEvent.value) {
+                        await openParticipantEventDetails(selectedCatalogEvent.value);
+                    }
                 } else {
                     Swal.fire({ icon: 'error', title: 'Não foi possível realizar a inscrição', text: (res.data && res.data.message) || `HTTP ${res.status}` });
                 }
@@ -260,10 +274,13 @@ createApp({
 
         // Estado do Passo 5: Busca e Catálogo Público para Participantes (search-service :8083)
         const publishedEventsCatalog = Vue.ref([]);
+        const searchedActivities = Vue.ref([]);
         const isSearchingCatalog = Vue.ref(false);
         const selectedCatalogEvent = Vue.ref(null);
         const searchFilters = reactive({
             keyword: '',
+            organization: '',
+            searchMode: 'EVENTS', // 'EVENTS' | 'ACTIVITIES'
             priceFilter: 'ALL', // 'ALL' | 'FREE' | 'PAID'
             onlyAvailable: false
         });
@@ -274,6 +291,9 @@ createApp({
                 const params = new URLSearchParams();
                 if (searchFilters.keyword && searchFilters.keyword.trim()) {
                     params.set('keyword', searchFilters.keyword.trim());
+                }
+                if (searchFilters.organization && searchFilters.organization.trim()) {
+                    params.set('organization', searchFilters.organization.trim());
                 }
                 if (searchFilters.priceFilter === 'FREE') {
                     params.set('onlyFree', 'true');
@@ -293,6 +313,24 @@ createApp({
                         if (updated) selectedCatalogEvent.value = updated;
                     }
                 }
+
+                if (searchFilters.searchMode === 'ACTIVITIES') {
+                    const actParams = new URLSearchParams();
+                    if (searchFilters.keyword && searchFilters.keyword.trim()) {
+                        actParams.set('keyword', searchFilters.keyword.trim());
+                    }
+                    if (searchFilters.priceFilter === 'FREE') {
+                        actParams.set('onlyFree', 'true');
+                    } else if (searchFilters.priceFilter === 'PAID') {
+                        actParams.set('onlyFree', 'false');
+                    }
+                    if (searchFilters.onlyAvailable) {
+                        actParams.set('onlyAvailable', 'true');
+                    }
+                    const actQs = actParams.toString() ? `?${actParams.toString()}` : '';
+                    const actRes = await window.EventHubAPI.request(`/api/search/activities${actQs}`);
+                    searchedActivities.value = (actRes.ok && Array.isArray(actRes.data)) ? actRes.data : [];
+                }
             } finally {
                 isSearchingCatalog.value = false;
             }
@@ -300,6 +338,7 @@ createApp({
 
         function clearSearchFilters() {
             searchFilters.keyword = '';
+            searchFilters.organization = '';
             searchFilters.priceFilter = 'ALL';
             searchFilters.onlyAvailable = false;
             searchPublishedCatalog();
@@ -353,6 +392,7 @@ createApp({
             }
             if (viewId === 'my-certificates') {
                 loadMyCertificates();
+                loadMyRegistrations();
             }
             if (viewId === 'organizer-analytics') {
                 loadAnalyticsReport();
@@ -542,12 +582,14 @@ createApp({
         }
 
         function openEventProgramScreen(ev) {
+            editingActivityId.value = null;
             selectedEvent.value = ev;
             state.activeView = 'event-program';
         }
 
         function openNewActivityForEvent(ev) {
             selectedEvent.value = ev;
+            editingActivityId.value = null;
             activityForm.eventId = ev.id;
             activityForm.title = '';
             activityForm.description = '';
@@ -555,6 +597,22 @@ createApp({
             activityForm.location = '';
             activityForm.startTime = (ev.startDate || '2026-11-25T10:00:00').slice(0, 19);
             activityForm.endTime = (ev.startDate || '2026-11-25T12:00:00').slice(0, 19);
+            state.activeView = 'activity-form';
+        }
+
+        function openEditActivityScreen(ev, act) {
+            selectedEvent.value = ev;
+            editingActivityId.value = act.id;
+            activityForm.eventId = ev.id;
+            activityForm.title = act.title || '';
+            activityForm.description = act.description || '';
+            activityForm.speaker = act.speaker || '';
+            activityForm.location = act.location || '';
+            activityForm.startTime = (act.startTime || '').slice(0, 19);
+            activityForm.endTime = (act.endTime || '').slice(0, 19);
+            activityForm.capacity = act.capacity;
+            activityForm.price = Number(act.price || 0);
+            activityForm.waitlistEnabled = Boolean(act.waitlistEnabled);
             state.activeView = 'activity-form';
         }
 
@@ -619,9 +677,13 @@ createApp({
         async function submitActivityForm() {
             if (!activityForm.eventId) return;
             const targetEventId = activityForm.eventId;
+            const isEditing = !!editingActivityId.value;
+            const url = isEditing
+                ? `/api/events/activities/${editingActivityId.value}`
+                : `/api/events/${targetEventId}/activities`;
 
-            const res = await window.EventHubAPI.request(`/api/events/${targetEventId}/activities`, {
-                method: 'POST',
+            const res = await window.EventHubAPI.request(url, {
+                method: isEditing ? 'PUT' : 'POST',
                 body: JSON.stringify({
                     title: activityForm.title,
                     description: activityForm.description,
@@ -636,6 +698,7 @@ createApp({
             });
 
             if (res.ok) {
+                editingActivityId.value = null;
                 activityForm.title = '';
                 activityForm.description = '';
                 activityForm.speaker = '';
@@ -653,7 +716,7 @@ createApp({
                         toast: true,
                         position: 'top-end',
                         icon: 'success',
-                        title: 'Atividade adicionada à programação!',
+                        title: isEditing ? 'Atividade atualizada com sucesso!' : 'Atividade adicionada à programação!',
                         showConfirmButton: false,
                         timer: 2000
                     });
@@ -661,7 +724,7 @@ createApp({
             } else if (window.Swal) {
                 Swal.fire({
                     icon: 'error',
-                    title: 'Erro ao cadastrar atividade',
+                    title: isEditing ? 'Erro ao atualizar atividade' : 'Erro ao cadastrar atividade',
                     text: (res.data && res.data.message) || 'Verifique os dados informados.'
                 });
             }
@@ -802,6 +865,32 @@ createApp({
             }
         }
 
+        async function viewRegistrationDetails(reg) {
+            const res = await window.EventHubAPI.request(`/api/registrations/${reg.id}`);
+            if (res.ok && res.data) {
+                const d = res.data;
+                Swal.fire({
+                    icon: 'info',
+                    title: `Inscrição #${d.id}`,
+                    html: `
+                        <div class="text-left text-xs space-y-1 font-mono">
+                            <p><strong>Atividade:</strong> ${activityTitle(d.activityId)} (#${d.activityId})</p>
+                            <p><strong>Status:</strong> ${statusLabel(d.status)} (${d.status})</p>
+                            <p><strong>Criada em:</strong> ${d.createdAt || '—'}</p>
+                            <p><strong>Atualizada em:</strong> ${d.updatedAt || '—'}</p>
+                            <p><strong>Expira em:</strong> ${d.expiresAt || '—'}</p>
+                        </div>
+                    `
+                });
+            } else {
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Erro ao consultar inscrição',
+                    text: (res.data && res.data.message) || `HTTP ${res.status}`
+                });
+            }
+        }
+
         async function cancelRegistration(reg) {
             const confirmation = await Swal.fire({
                 title: 'Cancelar inscrição?',
@@ -851,6 +940,28 @@ createApp({
         async function loadMyCertificates() {
             const res = await window.EventHubAPI.request('/api/events/certificates/my');
             myCertificates.value = res.ok && Array.isArray(res.data) ? res.data : [];
+        }
+
+        async function issueCertificateForActivity(activityId) {
+            if (!activityId) return;
+            const res = await window.EventHubAPI.request('/api/events/certificates/issue', {
+                method: 'POST',
+                body: JSON.stringify({ activityId: Number(activityId) })
+            });
+            if (res.ok) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Certificado emitido com sucesso!',
+                    text: `Código de validação: ${res.data.validationCode}`
+                });
+                await loadMyCertificates();
+            } else {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Emissão não permitida (RN06)',
+                    text: (res.data && res.data.message) || `HTTP ${res.status}`
+                });
+            }
         }
 
         async function validateCertificate() {
@@ -1150,6 +1261,7 @@ createApp({
             notificationFailureMode,
             notificationTestResult,
             publishedEventsCatalog,
+            searchedActivities,
             isSearchingCatalog,
             selectedCatalogEvent,
             searchFilters,
@@ -1165,9 +1277,12 @@ createApp({
             openEditEventScreen,
             openEventProgramScreen,
             openNewActivityForEvent,
+            openEditActivityScreen,
+            editingActivityId,
             submitEventForm,
             changeEventStatus,
             submitActivityForm,
+            viewRegistrationDetails,
             markActivityCompleted,
             testAccessControlValidator,
             loadUserNotifications,
@@ -1198,6 +1313,7 @@ createApp({
             loadMyPayments,
             simulatePaymentAction,
             loadMyCertificates,
+            issueCertificateForActivity,
             validateCertificate,
             checkinEventId,
             checkinRegistrations,

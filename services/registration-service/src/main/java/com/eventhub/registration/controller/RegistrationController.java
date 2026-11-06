@@ -70,6 +70,15 @@ public class RegistrationController {
         return registrationService.applyPaymentResult(body);
     }
 
+    @Operation(summary = "Cancela todas as inscrições ativas de um evento (RF02, RF05)")
+    @PostMapping("/event/{eventId}/cancel-all")
+    public Map<String, Object> cancelAllByEvent(@PathVariable Long eventId, HttpServletRequest request) {
+        Long userId = (Long) request.getAttribute("authenticatedUserId");
+        String role = (String) request.getAttribute("authenticatedRole");
+        int cancelledCount = registrationService.cancelAllByEvent(eventId, userId, role);
+        return Map.of("eventId", eventId, "cancelledRegistrations", cancelledCount);
+    }
+
     private Long currentUserId(HttpServletRequest request) {
         Object userId = request.getAttribute("authenticatedUserId");
         if (userId == null) {

@@ -32,31 +32,61 @@ class PaymentService:
             raise HTTPException(status_code=422, detail="Inscrição ou participante inexistente.")
         return self._to_schema(payment)
 
-    def confirm(self, payment_id: int) -> PaymentResponse:
+    def confirm(self, payment_id: int, current_user: dict | None = None) -> PaymentResponse:
         return self._transition(
             payment_id, "APPROVED", "PAYMENT_APPROVED",
             "Pagamento aprovado. Sua inscrição foi confirmada.",
+            current_user=current_user,
         )
 
-    def refuse(self, payment_id: int) -> PaymentResponse:
+    def refuse(self, payment_id: int, current_user: dict | None = None) -> PaymentResponse:
         return self._transition(
             payment_id, "REFUSED", "PAYMENT_REFUSED",
             "Pagamento recusado. A vaga reservada foi liberada.",
+            current_user=current_user,
         )
 
-    def expire(self, payment_id: int) -> PaymentResponse:
+    def expire(self, payment_id: int, current_user: dict | None = None) -> PaymentResponse:
         return self._transition(
             payment_id, "EXPIRED", "PAYMENT_EXPIRED",
             "Prazo de pagamento expirado. A vaga reservada foi liberada.",
+            current_user=current_user,
         )
 
-    def list_by_registration(self, registration_id: int) -> List[PaymentResponse]:
+    def list_by_registration(self, registration_id: int, current_user: dict | None = None) -> List[PaymentResponse]:
+        if current_user is not None and current_user.get("role") != "ORGANIZER":
+            owner_id = self.repository.find_registration_user_id(registration_id)
+            if owner_id is not None and owner_id != int(current_user["userId"]):
+                raise HTTPException(
+                    status_code=403,
+                    detail="RN07 Violada: Participantes podem consultar apenas seus próprios pagamentos.",
+                )
         return [self._to_schema(p) for p in self.repository.find_by_registration(registration_id)]
 
-    def _transition(self, payment_id: int, new_status: str, event_type: str, message: str) -> PaymentResponse:
+    def cancel_pending_by_registration(self, registration_id: int, new_status: str = "EXPIRED") -> int:
+        target = new_status if new_status in ("EXPIRED", "REFUSED") else "EXPIRED"
+        return self.repository.cancel_pending_by_registration(registration_id, target)
+
+    def _transition(
+        self,
+        payment_id: int,
+        new_status: str,
+        event_type: str,
+        message: str,
+        current_user: dict | None = None,
+    ) -> PaymentResponse:
         payment = self.repository.find_by_id(payment_id)
         if payment is None:
             raise HTTPException(status_code=404, detail="Pagamento não encontrado.")
+        if (
+            current_user is not None
+            and current_user.get("role") != "ORGANIZER"
+            and int(payment.user_id) != int(current_user["userId"])
+        ):
+            raise HTTPException(
+                status_code=403,
+                detail="RN07 Violada: Participantes podem operar apenas seus próprios pagamentos.",
+            )
         if payment.status != "PENDING":
             raise HTTPException(
                 status_code=409,

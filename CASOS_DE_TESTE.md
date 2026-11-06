@@ -85,7 +85,7 @@ Para o acesso ao Swagger, faça `POST /api/users/login` com uma das contas, copi
 **Resultado esperado:** a mensagem *Evento atualizado com sucesso!* aparece e o novo título é exibido na lista.
 
 ### CT-EV-03 — Cadastrar atividade com preço e lista de espera
-1. Em *Meus Eventos*, clique em **Programação** no evento.
+1. Em *Meus Eventos*, clique em **Ver Programação** no evento.
 2. Clique em **Nova Atividade**.
 3. Preencha **Título**, **Palestrante**, **Local**, **Início**, **Término**, **Capacidade** e **Valor de Inscrição** (use um valor maior que zero para testar atividade paga).
 4. Ative **Permitir Lista de Espera**.
@@ -93,50 +93,55 @@ Para o acesso ao Swagger, faça `POST /api/users/login` com uma das contas, copi
 
 **Resultado esperado:** a atividade aparece na tabela da programação com a coluna **Ocupação** zerada e a coluna **Lista de Espera** indicando a configuração escolhida.
 
+### CT-EV-03B — Editar atividade da programação e validar RN01
+1. Na tela **Programação** do evento, clique no ícone de lápis (**Editar Atividade**) ao lado de uma atividade existente.
+2. Altere o **Local** ou o **Horário** e clique em **Salvar Alterações**.
+3. Em uma atividade que já possua participantes inscritos (`occupiedSlots >= 2`), edite novamente e informe uma **Capacidade** menor que o número de inscritos ocupados.
+
+**Resultado esperado:** na primeira edição, a atividade é atualizada (`200 OK`) e os participantes inscritos recebem a notificação `ACTIVITY_UPDATED`. Na segunda tentativa, o sistema recusa a redução com alerta da regra **RN01** (`HTTP 422 Unprocessable Entity`).
+
 ### CT-EV-04 — Publicar evento
 1. Em *Meus Eventos*, clique em **Publicar** no evento em rascunho.
 
 **Resultado esperado:** o status muda para **Publicado** e o evento passa a aparecer na busca do participante (`search-service`).
 
-### CT-EV-05 — Cancelar evento
-1. Em *Meus Eventos*, clique em **Cancelar** em um evento de teste.
+### CT-EV-05 — Cancelar evento (encerramento de reservas e notificação)
+1. Em *Meus Eventos*, clique em **Cancelar** em um evento de teste que possua inscrições ativas.
 
-**Resultado esperado:** o status muda para **Cancelado** e o evento deixa de aparecer na busca pública.
+**Resultado esperado:** o status do evento muda para **Cancelado**, o evento deixa de aparecer na busca pública, todas as inscrições ativas (`CONFIRMED`, `PENDING_PAYMENT`, `WAITLIST`) passam para `CANCELLED`, eventuais pagamentos `PENDING` passam para `EXPIRED`, `occupiedSlots` das atividades zera e os participantes inscritos recebem a notificação `EVENT_CANCELLED`.
 
 ### CT-EV-06 — Marcar atividade como concluída
 1. Abra a **Programação** de um evento publicado.
 2. Clique em **Marcar Concluída** em uma atividade.
 
-**Resultado esperado:** a atividade passa a exibir **Concluída**.
+**Resultado esperado:** a atividade passa a exibir **Concluída** (e emite automaticamente certificados para os participantes que já realizaram check-in).
 
-### CT-EV-07 — Check-in de participante
-Pré-condição: existe uma inscrição com status `CONFIRMED` (ver CT-RG-01 ou o Chaos Lab).
+### CT-EV-07 — Check-in de participante (RF09)
+Pré-condição: existe uma inscrição com status `CONFIRMED` (ver CT-RG-01).
 1. Logado como organizador, abra **Credenciamento & Check-in**.
-2. No campo **ID da inscrição**, digite o ID da inscrição confirmada.
-3. Clique em **Registrar presença** (ou pressione Enter).
+2. Selecione o **Evento** no seletor superior (e filtre pelo nome/e-mail se desejar).
+3. Na linha do participante inscrito, clique em **Registrar presença**.
 
-**Resultado esperado:** o registro aparece em *Últimos registros nesta sessão*. Um segundo check-in da mesma inscrição deve ser recusado.
+**Resultado esperado:** a linha passa a exibir o badge **Presente**, o botão muda para *Presença registrada* (desabilitado) e o registro aparece em *Últimos registros nesta sessão*. Uma segunda tentativa via API/Swagger para a mesma inscrição retorna `409 Conflict` (`RF09: Check-in já realizado`).
 
-### CT-EV-08 — Emissão de certificado (via Swagger)
+### CT-EV-08 — Emissão de certificado pela SPA (RF10, RN06)
 Pré-condição: a inscrição do participante tem presença registrada (CT-EV-07) e a atividade foi concluída (CT-EV-06).
-1. Abra `http://localhost:8080/swagger.html` e selecione **event-service**.
-2. Autentique-se com o token do participante.
-3. Execute `POST /api/events/certificates/issue` com o `activityId` da atividade concluída.
-4. Abra a SPA como o mesmo participante e vá em **Meus Certificados**.
+1. Logado como o participante, abra **Minhas Inscrições** ou **Meus Certificados**.
+2. Clique no botão **Emitir certificado** da atividade concluída (ou confira a seção de certificados emitidos automaticamente na conclusão/check-in).
 
-**Resultado esperado:** a resposta do Swagger é de criação, e o certificado aparece em *Meus Certificados* com o título da atividade.
+**Resultado esperado:** o certificado é emitido (`201 Created`) ou, se já tiver sido gerado automaticamente na conclusão da atividade, consta listado em **Meus Certificados** com código de autenticidade único (`validationCode`).
 
-### CT-EV-09 — Emissão de certificado sem presença registrada
-1. Repita CT-EV-08 usando uma inscrição sem check-in.
+### CT-EV-09 — Emissão de certificado sem conclusão ou sem presença (RN06)
+1. Logado como participante, vá em **Minhas Inscrições** (ou **Meus Certificados**) e clique em **Emitir certificado** em uma atividade ainda não concluída ou na qual o participante não realizou check-in.
 
-**Resultado esperado:** a emissão é recusada e nenhum certificado é criado.
+**Resultado esperado:** o sistema exibe o aviso **Emissão não permitida (RN06)** (`HTTP 422`) informando que a atividade ainda não foi concluída ou que não há registro de presença.
 
 ### CT-EV-10 — Validação pública de certificado
 1. Em **Meus Certificados**, copie o código de validação de um certificado.
 2. Em **Validar um certificado**, cole o código e clique em **Validar**.
 3. Repita com um código inventado, por exemplo `CODIGO-INEXISTENTE`.
 
-**Resultado esperado:** o primeiro mostra *Certificado válido*. O segundo mostra *Certificado não encontrado ou inválido*.
+**Resultado esperado:** o primeiro mostra *Certificado válido* (`HTTP 200`). O segundo mostra *Certificado não encontrado ou inválido* (`HTTP 404`).
 
 ---
 
@@ -147,66 +152,75 @@ Pré-condição: a inscrição do participante tem presença registrada (CT-EV-0
 
 **Resultado esperado:** somente eventos com status **Publicado** aparecem. Eventos em rascunho ou cancelados não aparecem.
 
-### CT-BU-02 — Busca por palavra-chave
-1. Digite um termo do título de um evento no campo de busca.
+### CT-BU-02 — Busca por palavra-chave e filtro por organização
+1. Digite um termo no campo **Palavra-chave** e/ou informe a instituição no campo **Organização** (ex.: `SBC`) e clique em **Buscar**.
 
-**Resultado esperado:** a vitrine mostra apenas os eventos que contêm o termo.
+**Resultado esperado:** a vitrine mostra apenas os eventos publicados que atendem simultaneamente à palavra-chave e à organização filtrada.
 
-### CT-BU-03 — Filtro por preço
-1. Em **Modalidade de Inscrição**, selecione *Gratuitos*. Depois, selecione *Pagos*.
+### CT-BU-03 — Filtro por modalidade (gratuitas / pagas)
+1. Em **Modalidade de Inscrição**, selecione *Apenas gratuitas*. Depois, selecione *Apenas pagas*.
 
-**Resultado esperado:** a lista muda conforme a seleção.
+**Resultado esperado:** a listagem de eventos/atividades filtra apenas atividades gratuitas ou pagas conforme a seleção.
 
-### CT-BU-04 — Filtro somente com vagas
-1. Ative **Somente com vagas**.
+### CT-BU-04 — Filtro somente com vagas (descontando `PENDING_PAYMENT`)
+1. Ative o seletor **Com vagas**.
 
-**Resultado esperado:** atividades esgotadas deixam de aparecer.
+**Resultado esperado:** atividades cuja soma de vagas confirmadas (`occupied_slots`) + reservas aguardando pagamento (`PENDING_PAYMENT`) já atingiu a capacidade deixam de aparecer.
 
 ### CT-BU-05 — Detalhe do evento e vagas em tempo real
-1. Clique em um evento da vitrine.
+1. Clique em **Ver Programação** em um evento da vitrine.
 2. Confira a seção **Programação de Atividades e Disponibilidade**.
-3. Compare o texto *N vaga(s) disponível(is)* com a barra **Ocupação da Atividade** (`ocupado / capacidade`).
+3. Compare o badge *N vaga(s) disponível(is)* com a barra **Ocupação da Atividade** (`ocupado / capacidade`).
 
-**Resultado esperado:** os valores são coerentes entre si. Após uma inscrição nova (CT-RG-01), o saldo diminui.
+**Resultado esperado:** os valores são coerentes entre si e são atualizados imediatamente na própria tela assim que o participante realiza uma inscrição (mesmo quando a inscrição paga entra em `PENDING_PAYMENT`).
+
+### CT-BU-06 — Busca direta de atividades da programação
+1. Em **Explorar Eventos**, clique na aba **Atividades da Programação**.
+2. Digite o nome de um palestrante (ex.: `Helena`) ou local no campo **Palavra-chave** e clique em **Buscar**.
+
+**Resultado esperado:** a tela consulta `GET /api/search/activities` e exibe diretamente os cards das atividades correspondentes, permitindo inscrever-se ou entrar na lista de espera sem precisar abrir o evento primeiro.
 
 ---
 
 ## 4. `registration-service` (Java, porta 8084)
 
-### CT-RG-01 — Criar inscrição (via Chaos Lab ou Swagger)
-A SPA não tem botão de inscrição. Use uma das alternativas:
-- **Chaos Lab**: o cenário de concorrência cria inscrições reais (ver CT-LAB-01).
-- **Swagger**: com o token do participante, execute `POST /api/registrations` informando o `activityId` de uma atividade com vagas.
+### CT-RG-01 — Criar inscrição e entrar na Lista de Espera pela SPA (RF05, RF06, RN04)
+1. Logado como participante, abra **Explorar Eventos**, clique em **Ver Programação** de um evento (ou use a aba **Atividades da Programação**).
+2. Em uma atividade com vagas disponíveis, clique em **Inscrever-se nesta atividade** e confirme.
+3. Em uma atividade com vagas esgotadas (`0 vagas`) e lista de espera habilitada, verifique que o botão exibe **Entrar na Lista de Espera**, clique nele e confirme.
 
-**Resultado esperado:** a inscrição é criada com um ID. Em atividade gratuita, o status vai para `CONFIRMED`. Em atividade paga, vai para `PENDING_PAYMENT`.
+**Resultado esperado:**
+- Em atividade gratuita com vaga: inscrição criada como `CONFIRMED` e contador de vagas atualizado imediatamente na tela.
+- Em atividade paga com vaga: inscrição criada como `PENDING_PAYMENT` (vaga já reservada no saldo público) e cobrança gerada em **Meus Pagamentos**.
+- Em atividade lotada com lista de espera: inscrição criada como `WAITLIST`.
+- *(Via Swagger)* Tentar `POST /api/registrations` em atividade de evento `DRAFT` ou `CANCELLED` retorna `409 Conflict`.
 
-### CT-RG-02 — Listar minhas inscrições
+### CT-RG-02 — Listar minhas inscrições e consultar detalhes individuais (`GET /api/registrations/{id}`)
 1. Logado como participante, abra **Minhas Inscrições**.
-2. Clique em **Atualizar** se necessário.
+2. Clique no botão **Detalhes** de uma inscrição.
 
-**Resultado esperado:** cada inscrição aparece com o título da atividade e o identificador *Inscrição #ID*.
+**Resultado esperado:** cada inscrição aparece com o título da atividade, status e número. Ao clicar em **Detalhes**, abre-se um modal com os dados retornados por `GET /api/registrations/{registrationId}` (ID, atividade, status, data de criação, atualização e expiração).
 
-### CT-RG-03 — Cancelar inscrição
-1. Em **Minhas Inscrições**, clique em **Cancelar inscrição** em uma inscrição ativa.
-2. Confirme no diálogo.
+### CT-RG-03 — Cancelar inscrição, promoção da fila e notificação (RN04, RF08)
+1. Em **Minhas Inscrições**, clique em **Cancelar inscrição** em uma inscrição ativa (`CONFIRMED`, `PENDING_PAYMENT` ou `WAITLIST`) e confirme.
 
-**Resultado esperado:** a inscrição muda para cancelada. Se houver lista de espera, o próximo da fila é promovido (confira em **Minhas Inscrições** do outro participante).
+**Resultado esperado:** a inscrição muda para `CANCELLED`, o titular recebe a notificação `REGISTRATION_CANCELLED` no sino de notificações, eventual pagamento `PENDING` é encerrado como `EXPIRED` e, se havia participante em `WAITLIST`, o primeiro da fila é promovido automaticamente (`CONFIRMED` em atividade gratuita ou `PENDING_PAYMENT` em atividade paga, recebendo `WAITLIST_PROMOTED`).
 
-### CT-RG-04 — Cancelamento de inscrição alheia (via Swagger)
-1. Com o token de `bruno@eventhub.com`, execute `PATCH /api/registrations/{registrationId}/cancel` usando o ID de uma inscrição de `ana@eventhub.com`.
+### CT-RG-04 — Cancelamento ou consulta de inscrição alheia (RN07 via Swagger)
+1. Com o token de `bruno@eventhub.com`, execute `GET /api/registrations/{registrationId}` ou `PATCH /api/registrations/{registrationId}/cancel` usando o ID de uma inscrição de `ana@eventhub.com`.
 
-**Resultado esperado:** o cancelamento é recusado e a inscrição permanece ativa.
+**Resultado esperado:** o acesso é recusado com `403 Forbidden` e a inscrição de Ana permanece inalterada.
 
-### CT-RG-05 — Relatório gerencial do organizador
+### CT-RG-05 — Relatório gerencial do organizador (RF11)
 1. Logado como organizador, abra **Relatórios & Indicadores**.
 2. Selecione um evento no seletor.
 
-**Resultado esperado:** os cartões mostram totais de inscrições, confirmadas, pendentes de pagamento, lista de espera, canceladas, presenças e receita. A seção **Ocupação por atividade** mostra uma linha por atividade.
+**Resultado esperado:** os cartões e a tabela mostram totais consistentes de **Inscrições**, **Confirmadas**, **Aguard. pagamento**, **Lista de espera**, **Canceladas**, **Recus. / Expir.** (`refused` + `expired`), **Presenças** e **Receita**, além do gráfico **Ocupação por atividade**.
 
-### CT-RG-06 — Relatório de evento de outro organizador
-1. Com o token de um organizador que não criou o evento (crie um segundo organizador pelo cadastro, se necessário), execute `GET /api/registrations/reports/event/{eventId}` pelo Swagger.
+### CT-RG-06 — Relatório de evento de outro organizador (RN07)
+1. Com o token de um participante ou de outro organizador que não criou o evento, execute `GET /api/registrations/reports/event/{eventId}` pelo Swagger.
 
-**Resultado esperado:** o acesso é recusado.
+**Resultado esperado:** o acesso é recusado com `403 Forbidden`.
 
 ---
 
@@ -326,13 +340,13 @@ Acesse como `organizador@eventhub.com`, em **⚡ Validação Arquitetural & Chao
 
 ## 9. Fluxo ponta a ponta (recomendado como teste final)
 
-1. **Organizador** cria um evento (CT-EV-01), adiciona uma atividade gratuita e uma paga (CT-EV-03) e publica o evento (CT-EV-04).
-2. **Participante** cadastra-se (CT-US-03) e encontra o evento em **Explorar Eventos** (CT-BU-01).
-3. **Participante** cria inscrições pelo Swagger (CT-RG-01). A inscrição paga fica `PENDING_PAYMENT`.
-4. **Participante** aprova o pagamento (CT-PG-02).
-5. **Organizador** registra a presença (CT-EV-07) e marca a atividade como concluída (CT-EV-06).
-6. **Participante** recebe o certificado via Swagger (CT-EV-08) e valida-o (CT-EV-10).
-7. **Organizador** confere os números em **Relatórios & Indicadores** (CT-RG-05).
+1. **Organizador** cria um evento (CT-EV-01), adiciona uma atividade gratuita e uma paga (CT-EV-03), edita um detalhe da atividade (CT-EV-03B) e publica o evento (CT-EV-04).
+2. **Participante** cadastra-se ou faz login (CT-US-01/03) e encontra o evento/atividade em **Explorar Eventos** usando filtro por organização ou a aba **Atividades da Programação** (CT-BU-02, CT-BU-06).
+3. **Participante** inscreve-se diretamente pela SPA nas atividades (CT-RG-01). A inscrição paga fica `PENDING_PAYMENT` e já desconta 1 vaga no catálogo (CT-BU-04/05).
+4. **Participante** aprova o pagamento em **Meus Pagamentos** (CT-PG-02).
+5. **Organizador** registra a presença em **Credenciamento & Check-in** (CT-EV-07) e marca a atividade como concluída (CT-EV-06).
+6. **Participante** consulta/emite o certificado em **Meus Certificados** (CT-EV-08) e valida o código publicamente (CT-EV-10).
+7. **Organizador** confere os indicadores consolidados em **Relatórios & Indicadores** (CT-RG-05).
 
 ---
 
@@ -340,11 +354,11 @@ Acesse como `organizador@eventhub.com`, em **⚡ Validação Arquitetural & Chao
 
 | Serviço | Casos | Como testar |
 |---|---|---|
-| `user-service` | CT-US-01 a CT-US-06 | SPA |
-| `event-service` | CT-EV-01 a CT-EV-10 | SPA e Swagger (certificados) |
-| `search-service` | CT-BU-01 a CT-BU-05 | SPA |
-| `registration-service` | CT-RG-01 a CT-RG-06 | SPA e Swagger (criação e cancelamento alheio) |
-| `payment-service` | CT-PG-01 a CT-PG-05 | SPA e Swagger (fallback) |
-| `notification-service` | CT-NT-01 a CT-NT-05 | SPA |
+| `user-service` | CT-US-01 a CT-US-06 | 100% via SPA |
+| `event-service` | CT-EV-01 a CT-EV-10 | 100% via SPA |
+| `search-service` | CT-BU-01 a CT-BU-06 | 100% via SPA |
+| `registration-service` | CT-RG-01 a CT-RG-06 | SPA (fluxos funcionais) e Swagger (testes negativos de segurança CT-RG-04 e CT-RG-06) |
+| `payment-service` | CT-PG-01 a CT-PG-05 | 100% via SPA (e Swagger para reenvio pós-aprovação) |
+| `notification-service` | CT-NT-01 a CT-NT-05 | 100% via SPA |
 | Status e infraestrutura | CT-ST-01 e CT-ST-02 | SPA e Docker |
-| Chaos Lab (RN01, RN03, RN05) | CT-LAB-01 a CT-LAB-04 | SPA |
+| Chaos Lab (RN01, RN03, RN05) | CT-LAB-01 a CT-LAB-04 | 100% via SPA |

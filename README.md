@@ -14,12 +14,12 @@ A solução adota o padrão **API Gateway + Orquestração REST Síncrona com De
 |---|---|---|---|---|---|
 | **Banco de Dados Único** | `infra/postgres/` | PostgreSQL 16 Alpine | `5432` | ✅ Implementado | Esquema relacional completo (`init.sql`), constraints de integridade/concorrência e carga inicial de dados (*seed*). |
 | **API Gateway & Web App** | `infra/gateway/` e `web-app/` | Nginx 1.27 + Vue.js 3 + Tailwind/DaisyUI | `8080` (Host) | ✅ Implementado | Ponto único de entrada HTTP, roteamento reverso (`/api/*`) com fallback resiliente e entrega da SPA Web com menu contextual por perfil. |
-| **1. `user-service`** | `services/user-service/` | Java 21 / Spring Boot 3 | `8081` | ✅ Implementado | Cadastro de usuários (`BCrypt`), autenticação (`JWT`), manutenção de perfil e isolamento de permissões (`ORGANIZER` vs. `PARTICIPANT`). |
-| **2. `event-service`** | `services/event-service/` | Java 21 / Spring Boot 3 | `8082` | ✅ Implementado | Criação, edição, publicação e cancelamento de eventos; cadastro e conclusão de atividades da programação com horários, locais, capacidade, preço e lista de espera; registro de presença (*check-in*) e emissão/validação de certificados (RF09, RF10, RN06). |
-| **3. `search-service`** | `services/search-service/` | Python 3.12 / FastAPI | `8083` | ✅ Implementado | Consulta otimizada de eventos publicados, programação detalhada, filtros por palavra-chave/gratuidade e cálculo de saldo de vagas em tempo real. |
-| **6. `notification-service`** | `services/notification-service/` | Python 3.12 / FastAPI | `8086` | ✅ Implementado | Envio e histórico de notificações com simulação de indisponibilidade (`503`) sem bloquear operações críticas. |
-| **5. `payment-service`** | `services/payment-service/` | Python 3.12 / FastAPI | `8085` | ✅ Implementado | Inicialização, confirmação, recusa e expiração de pagamentos simulados; webhook para `registration-service` e aviso resiliente ao `notification-service`. |
-| **4. `registration-service`** | `services/registration-service/` | Java 21 / Spring Boot 3 | `8084` | ✅ Implementado (Passo 8) | Solicitação, consulta e cancelamento de inscrições, controle de concorrência (*lock* pessimista), lista de espera, webhook de resultado de pagamento e relatórios gerenciais por evento (RF11). |
+| **1. `user-service`** | `services/user-service/` | Java 21 / Spring Boot 3 | `8081` | ✅ Implementado | Cadastro de usuários (`BCrypt`), autenticação (`JWT`), manutenção de perfil e isolamento de permissões (`ORGANIZER` vs. `PARTICIPANT`, RN07). |
+| **2. `event-service`** | `services/event-service/` | Java 21 / Spring Boot 3 | `8082` | ✅ Implementado | Criação, edição, publicação e cancelamento de eventos (com encerramento de inscrições ativas e notificação aos inscritos); cadastro, edição (`RN01`) e conclusão de atividades da programação; registro de presença (*check-in*) e emissão/validação de certificados (RF02, RF03, RF08, RF09, RF10, RN06, RN07). |
+| **3. `search-service`** | `services/search-service/` | Python 3.12 / FastAPI | `8083` | ✅ Implementado | Consulta otimizada de eventos publicados e busca direta de atividades (`GET /api/search/activities`), filtros por palavra-chave, organização, gratuidade e disponibilidade (`onlyAvailable`), com cálculo de saldo de vagas em tempo real descontando reservas `PENDING_PAYMENT` (RF04, RN02). |
+| **4. `registration-service`** | `services/registration-service/` | Java 21 / Spring Boot 3 | `8084` | ✅ Implementado | Solicitação, consulta e cancelamento de inscrições (restritas a eventos `PUBLISHED`), controle de concorrência (*lock* pessimista `FOR UPDATE`), lista de espera com promoção automática (`RN04`), expiração agendada (`RN02`/`RN03`), webhook de resultado de pagamento e relatórios gerenciais completos por evento (RF05, RF06, RF11). |
+| **5. `payment-service`** | `services/payment-service/` | Python 3.12 / FastAPI | `8085` | ✅ Implementado | Inicialização, confirmação, recusa, expiração e cancelamento automático de pagamentos pendentes; autenticação JWT e validação de titularidade (`RN07`); webhook para `registration-service` e aviso resiliente ao `notification-service` (RF07, RN02, RN03). |
+| **6. `notification-service`** | `services/notification-service/` | Python 3.12 / FastAPI | `8086` | ✅ Implementado | Envio e histórico de notificações (inscrição, confirmação, cancelamento, pagamento, promoção da fila, certificados e alterações/cancelamento de evento ou atividade), autenticação JWT (`RN07`) e simulação de indisponibilidade (`503`) sem bloquear operações críticas (RF08, RN05). |
 
 ---
 
@@ -92,24 +92,31 @@ Além dos endpoints de base (usuários, eventos, busca), os serviços abaixo for
 
 | Serviço | Método | Endpoint | Descrição |
 |---|---|---|---|
-| **event-service** | `POST` | `/api/events/attendance/check-in` | Registra a presença (*check-in*) de uma inscrição (RF09). |
-| **event-service** | `POST` | `/api/events/certificates/issue` | Emite certificado de participação para inscrição com presença registrada (RN06). |
-| **event-service** | `GET` | `/api/events/certificates/my` | Lista os certificados do participante autenticado. |
-| **event-service** | `GET` | `/api/events/certificates/validate/{validationCode}` | Valida a autenticidade de um certificado pelo código. |
-| **registration-service** | `POST` | `/api/registrations` | Cria inscrição com controle de vagas, lista de espera e prevenção de duplicidade (RN01, RN04). |
-| **registration-service** | `GET` | `/api/registrations/my` | Lista as inscrições do participante autenticado. |
-| **registration-service** | `GET` | `/api/registrations/{registrationId}` | Consulta uma inscrição do próprio usuário. |
-| **registration-service** | `PATCH` | `/api/registrations/{registrationId}/cancel` | Cancela inscrição, libera a vaga e promove o próximo da lista de espera (RN04). |
-| **registration-service** | `POST` | `/api/registrations/payment-webhook` | Recebe o resultado do pagamento (`payment-service`) e confirma ou libera a vaga (RN02, RN03). |
-| **registration-service** | `GET` | `/api/registrations/reports/event/{eventId}` | Relatório gerencial do evento para o organizador: totais e indicadores por atividade (RF11, RN07). |
-| **payment-service** | `POST` | `/api/payments/initiate` | Inicia um pagamento simulado para uma inscrição pendente (RF07, RN02). |
-| **payment-service** | `GET` | `/api/payments/registration/{registrationId}` | Consulta o pagamento associado a uma inscrição. |
-| **payment-service** | `POST` | `/api/payments/{paymentId}/confirm` | Confirma o pagamento (`APPROVED`). |
-| **payment-service** | `POST` | `/api/payments/{paymentId}/refuse` | Recusa o pagamento (`REFUSED`), cenário RN03. |
-| **payment-service** | `POST` | `/api/payments/{paymentId}/expire` | Expira o pagamento (`EXPIRED`), cenário RN03. |
-| **notification-service** | `GET` | `/api/notifications/simulate-failure` | Consulta se a simulação de indisponibilidade está ativa. |
-| **notification-service** | `POST` | `/api/notifications/simulate-failure?fail=true\|false` | Liga ou desliga a simulação de falha, que faz `/send` responder `503` (RN05). |
-| **notification-service** | `POST` | `/api/notifications/send` | Envia uma notificação (retorna `503` quando a falha simulada está ativa). |
+| **event-service** | `PUT` | `/api/events/activities/{activityId}` | Atualiza dados de uma atividade validando `RN01` (capacidade $\ge$ ocupadas) e notificando inscritos (RF03, RF08). |
+| **event-service** | `GET` | `/api/events/attendance/events/{eventId}/registrations` | Lista inscrições confirmadas do evento com status de presença (RF09, RN07). |
+| **event-service** | `POST` | `/api/events/attendance/check-in` | Registra a presença (*check-in*) de uma inscrição confirmada e previne duplicidade (RF09). |
+| **event-service** | `POST` | `/api/events/certificates/issue` | Emite certificado de participação para inscrição com presença e atividade concluída (RF10, RN06). |
+| **event-service** | `GET` | `/api/events/certificates/my` | Lista os certificados do participante autenticado (RF10, RN07). |
+| **event-service** | `GET` | `/api/events/certificates/validate/{validationCode}` | Valida publicamente a autenticidade de um certificado pelo código (RF10). |
+| **search-service** | `GET` | `/api/search/events` | Lista eventos `PUBLISHED` filtrando por `keyword`, `organization`, `onlyFree` e `onlyAvailable`, descontando reservas `PENDING_PAYMENT` (RF04, RN02). |
+| **search-service** | `GET` | `/api/search/activities` | Busca direta de atividades publicadas por título, palestrante ou local (RF04). |
+| **registration-service** | `POST` | `/api/registrations` | Cria inscrição em evento `PUBLISHED` com controle de vagas (`FOR UPDATE`), lista de espera e prevenção de duplicidade (RF05, RF06, RN01, RN04). |
+| **registration-service** | `GET` | `/api/registrations/my` | Lista as inscrições do participante autenticado (RF05, RN07). |
+| **registration-service** | `GET` | `/api/registrations/{registrationId}` | Consulta os detalhes de uma inscrição do próprio titular (RF05, RN07). |
+| **registration-service** | `PATCH` | `/api/registrations/{registrationId}/cancel` | Cancela inscrição, libera vaga, promove o 1º da lista de espera (`RN04`), encerra pagamento pendente e notifica o titular (RF05, RF08). |
+| **registration-service** | `POST` | `/api/registrations/event/{eventId}/cancel-all` | *(Interno / Organizador)* Cancela todas as inscrições ativas e pagamentos pendentes quando um evento é cancelado (RF02, RF05). |
+| **registration-service** | `POST` | `/api/registrations/payment-webhook` | *(Interno Docker)* Recebe resultado do `payment-service` e confirma ou libera a vaga (RN02, RN03). |
+| **registration-service** | `GET` | `/api/registrations/reports/event/{eventId}` | Relatório gerencial do evento: confirmadas, aguardando pagamento, espera, canceladas, recusadas, expiradas, presenças e receita (RF11, RN07). |
+| **payment-service** | `POST` | `/api/payments/initiate` | *(Interno Docker)* Inicia pagamento simulado para inscrição pendente (RF07, RN02). |
+| **payment-service** | `POST` | `/api/payments/registration/{registrationId}/cancel-pending` | *(Interno Docker)* Encerra pagamentos `PENDING` quando a inscrição é cancelada ou expira (RN02, RN03). |
+| **payment-service** | `GET` | `/api/payments/registration/{registrationId}` | Consulta os pagamentos associados a uma inscrição do titular (RF07, RN07). |
+| **payment-service** | `POST` | `/api/payments/{paymentId}/confirm` | Confirma o pagamento (`APPROVED`) pelo titular (RF07, RN02, RN07). |
+| **payment-service** | `POST` | `/api/payments/{paymentId}/refuse` | Recusa o pagamento (`REFUSED`), liberando a vaga e promovendo a fila (RF07, RN03, RN04). |
+| **payment-service** | `POST` | `/api/payments/{paymentId}/expire` | Expira o pagamento (`EXPIRED`), liberando a vaga e promovendo a fila (RF07, RN03, RN04). |
+| **notification-service** | `GET` | `/api/notifications/user/{userId}` | Lista as notificações do próprio usuário autenticado (RF08, RN07). |
+| **notification-service** | `GET` | `/api/notifications/simulate-failure` | Consulta se a simulação de indisponibilidade (`503`) está ativa (RN05). |
+| **notification-service** | `POST` | `/api/notifications/simulate-failure?fail=true\|false` | Liga ou desliga a simulação de falha (`503`) em `/send` (RN05, RQ03). |
+| **notification-service** | `POST` | `/api/notifications/send` | Envia e persiste uma notificação (retorna `503` quando a falha simulada está ativa). |
 
 > Os endpoints de `search-service`, `user-service` e `notification-service` (leitura, marcação como lida e remoção) continuam disponíveis no Swagger Portal.
 
@@ -159,9 +166,9 @@ A aplicação inicia na **Tela de Login**. Utilize uma das contas abaixo (detalh
 
 A SPA em `http://localhost:8080` organiza as telas por perfil:
 
-- **Participante**: Explorar Eventos, Minhas Inscrições, Meus Pagamentos (checkout simulado com aprovação, recusa ou expiração), Meus Certificados (visualização e verificador público de autenticidade).
-- **Organizador**: Meus Eventos, Programação e Atividades, Credenciamento & Check-in (terminal de presença), Relatórios & Indicadores (gráficos com Chart.js).
-- **Validadores do Sistema**: Status dos Serviços e **Chaos Lab** (tela administrativa de validação arquitetural).
+- **Participante**: Explorar Eventos (com abas **Eventos** e **Atividades da Programação**, filtros por palavra-chave, organização, gratuidade e disponibilidade de vagas, inscrição direta e entrada na **Lista de Espera**), Minhas Inscrições (consulta de detalhes individuais `GET /api/registrations/{id}`, emissão manual de certificado e cancelamento), Meus Pagamentos (checkout simulado com aprovação, recusa ou expiração), Meus Certificados (solicitação por atividade inscrita, listagem de certificados emitidos e verificador público de autenticidade).
+- **Organizador**: Meus Eventos (criação, edição, publicação e cancelamento com encerramento automático de inscrições ativas), Programação e Atividades (cadastro, edição validando `RN01` e conclusão de atividades), Credenciamento & Check-in (terminal de presença com emissão automática de certificado se concluída), Relatórios & Indicadores (indicadores completos de confirmadas, pendentes, espera, canceladas, recusadas/expiradas, presenças e receita com Chart.js).
+- **Validadores do Sistema**: Status dos Serviços, Validador de Isolamento de Acesso (`RN07`), Simulador de Indisponibilidade de Notificações (`RN05`) e **Chaos Lab** (tela administrativa de validação arquitetural).
 
 ### Chaos Lab
 

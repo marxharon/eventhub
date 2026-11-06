@@ -10,6 +10,10 @@ class Settings(BaseSettings):
     postgres_db: str = os.getenv("POSTGRES_DB", "eventhub_db")
     postgres_user: str = os.getenv("POSTGRES_USER", "eventhub")
     postgres_password: str = os.getenv("POSTGRES_PASSWORD", "eventhub_secret_2026")
+    jwt_secret: str = os.getenv(
+        "JWT_SECRET",
+        "EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture",
+    )
 
     @property
     def database_url(self) -> str:
