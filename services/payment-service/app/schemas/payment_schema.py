@@ -14,6 +14,7 @@ class PaymentResponse(BaseModel):
     userId: int
     amount: float
     status: str
+    registrationSyncPending: bool = False
     providerRef: str
     createdAt: datetime
     updatedAt: datetime
