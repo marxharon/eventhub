@@ -93,10 +93,19 @@ class PaymentService:
                 detail=f"Transição inválida: pagamento já está em {payment.status}.",
             )
 
+        previous_status = payment.status
         payment = self.repository.update_status(payment, new_status)
 
-        # Efeitos colaterais após persistir o estado: falhas não revertem o pagamento (RN05).
-        DownstreamClient.notify_registration(payment.registration_id, payment.id, new_status)
+        # Consistência entre pagamento e inscrição (RN02/RN03): se o registration-service não confirmar,
+        # reverte-se o pagamento para evitar que o pagamento fique aprovado com a inscrição pendente.
+        if not DownstreamClient.notify_registration(payment.registration_id, payment.id, new_status):
+            self.repository.update_status(payment, previous_status)
+            raise HTTPException(
+                status_code=424,
+                detail="Serviço de inscrições indisponível para sincronizar o status do pagamento. Operação revertida.",
+            )
+
+        # Notificação ao usuário é não-bloqueante (RN05).
         email = self.repository.find_user_email(payment.user_id)
         if email:
             DownstreamClient.send_notification(payment.user_id, email, event_type, message)

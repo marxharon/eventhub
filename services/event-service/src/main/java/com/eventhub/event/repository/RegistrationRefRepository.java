@@ -16,4 +16,7 @@ public interface RegistrationRefRepository extends JpaRepository<RegistrationRef
 
     @Query("SELECT DISTINCT r.userId FROM RegistrationRef r JOIN Activity a ON a.id = r.activityId WHERE a.eventId = :eventId AND r.status IN ('CONFIRMED', 'PENDING_PAYMENT', 'WAITLIST')")
     List<Long> findActiveUserIdsByEventId(@Param("eventId") Long eventId);
+
+    @Query("SELECT COUNT(r) FROM RegistrationRef r WHERE r.activityId = :activityId AND r.status = 'PENDING_PAYMENT'")
+    long countPendingPaymentByActivityId(@Param("activityId") Long activityId);
 }

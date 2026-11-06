@@ -73,7 +73,7 @@ public class RegistrationController {
     @Operation(summary = "Cancela todas as inscrições ativas de um evento (RF02, RF05)")
     @PostMapping("/event/{eventId}/cancel-all")
     public Map<String, Object> cancelAllByEvent(@PathVariable Long eventId, HttpServletRequest request) {
-        Long userId = (Long) request.getAttribute("authenticatedUserId");
+        Long userId = currentUserId(request);
         String role = (String) request.getAttribute("authenticatedRole");
         int cancelledCount = registrationService.cancelAllByEvent(eventId, userId, role);
         return Map.of("eventId", eventId, "cancelledRegistrations", cancelledCount);

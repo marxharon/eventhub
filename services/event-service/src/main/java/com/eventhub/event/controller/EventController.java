@@ -84,6 +84,7 @@ public class EventController {
     ) {
         Long userId = (Long) request.getAttribute("authenticatedUserId");
         String role = (String) request.getAttribute("authenticatedRole");
-        return ResponseEntity.ok(eventService.cancelEvent(id, userId, role));
+        String authHeader = request.getHeader("Authorization");
+        return ResponseEntity.ok(eventService.cancelEvent(id, userId, role, authHeader));
     }
 }

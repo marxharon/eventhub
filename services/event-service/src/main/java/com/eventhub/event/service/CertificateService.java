@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -45,6 +46,9 @@ public class CertificateService {
         if (!Boolean.TRUE.equals(activity.getCompleted())) {
             return;
         }
+        if (activity.getStartTime() != null && LocalDateTime.now().isBefore(activity.getStartTime())) {
+            return;
+        }
         if (certificateRepository.existsByRegistrationId(attendance.getRegistrationId())) {
             return;
         }
@@ -73,6 +77,12 @@ public class CertificateService {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_ENTITY,
                     "RN06: A atividade ainda não foi concluída; o certificado não pode ser emitido."
+            );
+        }
+        if (activity.getStartTime() != null && LocalDateTime.now().isBefore(activity.getStartTime())) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "RN06: Não é possível emitir certificado para uma atividade futura antes de sua realização."
             );
         }
 

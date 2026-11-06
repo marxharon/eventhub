@@ -121,6 +121,12 @@ public class RegistrationService {
             Locked locked = lockRegistration(request.registrationId());
             Registration reg = locked.registration();
             if (reg.getStatus() != RegistrationStatus.PENDING_PAYMENT) {
+                if (("APPROVED".equals(result) && reg.getStatus() == RegistrationStatus.CONFIRMED)
+                        || ("REFUSED".equals(result) && reg.getStatus() == RegistrationStatus.REFUSED)
+                        || ("EXPIRED".equals(result) && reg.getStatus() == RegistrationStatus.EXPIRED)) {
+                    log.info("Webhook idempotente ignorado para inscrição {} já em {}", request.registrationId(), reg.getStatus());
+                    return;
+                }
                 throw conflict("Inscrição não está aguardando pagamento.");
             }
             switch (result) {
@@ -160,14 +166,14 @@ public class RegistrationService {
         return ids.size();
     }
 
-    /** Cancela todas as inscrições ativas das atividades de um evento e zera vagas ocupadas (RF02, RF05). */
+    /** Cancela todas as inscrições ativas das atividades de um evento e zera vagas ocupadas (RF02, RF05, RN07). */
     public int cancelAllByEvent(Long eventId, Long authenticatedUserId, String authenticatedRole) {
         EventRef event = eventRefRepository.findById(eventId)
                 .orElseThrow(() -> notFound("Evento não encontrado."));
-        if (authenticatedUserId != null) {
-            if (!"ORGANIZER".equals(authenticatedRole) || !event.getOrganizerId().equals(authenticatedUserId)) {
-                throw forbidden("RN07 Violada: Você só pode administrar eventos sob sua própria responsabilidade.");
-            }
+        if (authenticatedUserId == null
+                || !"ORGANIZER".equals(authenticatedRole)
+                || !event.getOrganizerId().equals(authenticatedUserId)) {
+            throw forbidden("RN07 Violada: Você só pode administrar eventos sob sua própria responsabilidade.");
         }
         List<Long> pendingPaymentRegIds = new java.util.ArrayList<>();
         Integer count = transactions.execute(status -> {

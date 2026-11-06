@@ -111,14 +111,14 @@ ALTER TABLE notifications ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFA
 -- =============================================================================
 -- DADOS INICIAIS DE EXEMPLO (SEED DATA - RQ08)
 -- Senha padrão para todos os usuários de teste: "123456"
--- Hash BCrypt correspondente a "123456": $2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy
+-- Hash BCrypt correspondente a "123456": $2a$10$NXhC2OSO8Q7odT3IZkCb5.nyOjN3JB1mhykOUQirAXeEgArY.KNq6
 -- =============================================================================
 
 INSERT INTO users (name, email, password_hash, role, organization_name) VALUES
-('Prof. Carlos Mendes (Organizador)', 'organizador@eventhub.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'ORGANIZER', 'SBC - Sociedade Brasileira de Computação'),
-('Ana Souza (Participante)', 'ana@eventhub.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'PARTICIPANT', 'Universidade Federal'),
-('Bruno Lima (Participante)', 'bruno@eventhub.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'PARTICIPANT', 'Instituto de Tecnologia'),
-('Carla Ferreira (Participante)', 'carla@eventhub.com', '$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy', 'PARTICIPANT', 'Tech Corp')
+('Prof. Carlos Mendes (Organizador)', 'organizador@eventhub.com', '$2a$10$NXhC2OSO8Q7odT3IZkCb5.nyOjN3JB1mhykOUQirAXeEgArY.KNq6', 'ORGANIZER', 'SBC - Sociedade Brasileira de Computação'),
+('Ana Souza (Participante)', 'ana@eventhub.com', '$2a$10$NXhC2OSO8Q7odT3IZkCb5.nyOjN3JB1mhykOUQirAXeEgArY.KNq6', 'PARTICIPANT', 'Universidade Federal'),
+('Bruno Lima (Participante)', 'bruno@eventhub.com', '$2a$10$NXhC2OSO8Q7odT3IZkCb5.nyOjN3JB1mhykOUQirAXeEgArY.KNq6', 'PARTICIPANT', 'Instituto de Tecnologia'),
+('Carla Ferreira (Participante)', 'carla@eventhub.com', '$2a$10$NXhC2OSO8Q7odT3IZkCb5.nyOjN3JB1mhykOUQirAXeEgArY.KNq6', 'PARTICIPANT', 'Tech Corp')
 ON CONFLICT (email) DO NOTHING;
 
 INSERT INTO events (title, description, organization, organizer_id, start_date, end_date, status) VALUES
@@ -176,8 +176,8 @@ INSERT INTO activities (event_id, title, description, speaker, location, start_t
     'Atividade concluída de demonstração para validação rápida de check-in e emissão de certificados (RN06).',
     'Eng. Roberto Alves',
     'Sala VIP B',
-    '2026-11-21 10:00:00',
-    '2026-11-21 12:00:00',
+    '2025-11-21 10:00:00',
+    '2025-11-21 12:00:00',
     3,
     0,
     0.00,

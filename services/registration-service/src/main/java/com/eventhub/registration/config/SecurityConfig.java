@@ -35,9 +35,8 @@ public class SecurityConfig {
                     "/swagger-ui/**",
                     "/v3/api-docs/**"
                 ).permitAll()
-                // Webhook interno chamado pelo payment-service e cancelamento em lote chamado pelo event-service pela rede Docker
+                // Webhook interno chamado pelo payment-service pela rede Docker
                 .requestMatchers(HttpMethod.POST, "/api/registrations/payment-webhook").permitAll()
-                .requestMatchers(HttpMethod.POST, "/api/registrations/event/*/cancel-all").permitAll()
                 .anyRequest().authenticated()
             )
             .exceptionHandling(ex -> ex

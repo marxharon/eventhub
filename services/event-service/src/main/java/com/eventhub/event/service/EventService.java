@@ -137,6 +137,16 @@ public class EventService {
 
     @Transactional
     public EventResponse cancelEvent(Long eventId, Long authenticatedUserId, String authenticatedRole) {
+        return cancelEvent(eventId, authenticatedUserId, authenticatedRole, null);
+    }
+
+    @Transactional
+    public EventResponse cancelEvent(
+            Long eventId,
+            Long authenticatedUserId,
+            String authenticatedRole,
+            String authorizationHeader
+    ) {
         ensureOrganizerRole(authenticatedRole);
         Event event = getOwnedEventOrThrow(eventId, authenticatedUserId);
 
@@ -146,10 +156,12 @@ public class EventService {
         Event saved = eventRepository.save(event);
 
         try {
-            registrationClient.post()
-                    .uri(registrationServiceUrl + "/api/registrations/event/" + eventId + "/cancel-all")
-                    .retrieve()
-                    .toBodilessEntity();
+            var requestSpec = registrationClient.post()
+                    .uri(registrationServiceUrl + "/api/registrations/event/" + eventId + "/cancel-all");
+            if (authorizationHeader != null && !authorizationHeader.isBlank()) {
+                requestSpec = requestSpec.header("Authorization", authorizationHeader);
+            }
+            requestSpec.retrieve().toBodilessEntity();
         } catch (Exception ex) {
             log.warn("Fallback local ao cancelar inscricoes do evento {}: {}", eventId, ex.getMessage());
             jdbcTemplate.update(

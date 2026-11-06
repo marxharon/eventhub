@@ -4,6 +4,7 @@ import com.eventhub.event.dto.ActivityRequest;
 import com.eventhub.event.dto.ActivityResponse;
 import com.eventhub.event.model.Activity;
 import com.eventhub.event.model.Event;
+import com.eventhub.event.model.EventStatus;
 import com.eventhub.event.repository.ActivityRepository;
 import com.eventhub.event.repository.AttendanceRepository;
 import com.eventhub.event.repository.RegistrationRefRepository;
@@ -13,6 +14,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -90,15 +92,23 @@ public class ActivityService {
             String authenticatedRole
     ) {
         eventService.ensureOrganizerRole(authenticatedRole);
-        Activity activity = activityRepository.findById(activityId)
+        Activity activity = activityRepository.findByIdForUpdate(activityId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Atividade não encontrada."));
 
         eventService.getOwnedEventOrThrow(activity.getEventId(), authenticatedUserId);
 
-        if (request.getCapacity() < activity.getOccupiedSlots()) {
+        if (request.getEndTime().isBefore(request.getStartTime())) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "O horário de término da atividade não pode ser anterior ao início.");
+        }
+
+        long pendingPaymentSlots = registrationRefRepository.countPendingPaymentByActivityId(activityId);
+        long totalReservedSlots = activity.getOccupiedSlots() + pendingPaymentSlots;
+
+        if (request.getCapacity() < totalReservedSlots) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_ENTITY,
-                    "RN01: A nova capacidade não pode ser menor que o número de vagas já ocupadas (" + activity.getOccupiedSlots() + ")."
+                    "RN01: A nova capacidade não pode ser menor que o total de vagas já reservadas (" + totalReservedSlots
+                            + ": " + activity.getOccupiedSlots() + " confirmadas e " + pendingPaymentSlots + " aguardando pagamento)."
             );
         }
 
@@ -133,7 +143,20 @@ public class ActivityService {
         Activity activity = activityRepository.findById(activityId)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Atividade não encontrada."));
 
-        eventService.getOwnedEventOrThrow(activity.getEventId(), authenticatedUserId);
+        Event event = eventService.getOwnedEventOrThrow(activity.getEventId(), authenticatedUserId);
+        if (event.getStatus() != EventStatus.PUBLISHED) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "RN06: Somente atividades de eventos publicados podem ser concluídas."
+            );
+        }
+        if (activity.getStartTime() != null && LocalDateTime.now().isBefore(activity.getStartTime())) {
+            throw new ResponseStatusException(
+                    HttpStatus.UNPROCESSABLE_ENTITY,
+                    "RN06: Não é possível marcar como concluída uma atividade futura antes do seu horário de início (" + activity.getStartTime() + ")."
+            );
+        }
+
         activity.setCompleted(true);
         Activity saved = activityRepository.save(activity);
 

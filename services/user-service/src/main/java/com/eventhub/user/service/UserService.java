@@ -45,20 +45,12 @@ public class UserService {
         return new AuthResponse(token, UserProfileDTO.fromEntity(saved));
     }
 
-    @Transactional
+    @Transactional(readOnly = true)
     public AuthResponse login(LoginRequest request) {
         User user = userRepository.findByEmailIgnoreCase(request.getEmail().trim())
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos."));
 
-        // Suporte híbrido para senha padrão '123456' nos usuários de seed e validação BCrypt padrão
-        boolean passwordMatches = passwordEncoder.matches(request.getPassword(), user.getPasswordHash());
-        if (!passwordMatches && "123456".equals(request.getPassword()) && user.getId() != null && user.getId() <= 4) {
-            user.setPasswordHash(passwordEncoder.encode("123456"));
-            userRepository.save(user);
-            passwordMatches = true;
-        }
-
-        if (!passwordMatches) {
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
             throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "E-mail ou senha inválidos.");
         }
 
