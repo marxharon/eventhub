@@ -930,7 +930,12 @@ createApp({
             const verbs = { confirm: 'aprovado', refuse: 'recusado', expire: 'expirado' };
             const res = await window.EventHubAPI.request(`/api/payments/${payment.id}/${action}`, { method: 'POST' });
             if (res.ok) {
-                Swal.fire({ icon: 'success', title: `Pagamento ${verbs[action]}.`, timer: 1800, showConfirmButton: false });
+                if (res.data && res.data.registrationSyncPending) {
+                    Swal.fire({ icon: 'info', title: `Pagamento ${verbs[action]}.`,
+                        text: 'O resultado foi registrado. A atualização da inscrição está pendente e será retomada automaticamente.' });
+                } else {
+                    Swal.fire({ icon: 'success', title: `Pagamento ${verbs[action]}.`, timer: 1800, showConfirmButton: false });
+                }
             } else {
                 Swal.fire({ icon: 'error', title: 'Operação não permitida', text: (res.data && res.data.message) || `HTTP ${res.status}` });
             }

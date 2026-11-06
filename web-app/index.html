@@ -1379,7 +1379,10 @@
                                         <td class="font-mono text-xs">#{{ p.id }}</td>
                                         <td class="text-xs">{{ activityTitle(p.activityId) }}</td>
                                         <td class="font-mono text-xs">{{ Number(p.amount).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) }}</td>
-                                        <td><span :class="['badge badge-sm', statusBadgeClass(p.status)]">{{ statusLabel(p.status) }}</span></td>
+                                        <td>
+                                            <span :class="['badge badge-sm', statusBadgeClass(p.status)]">{{ statusLabel(p.status) }}</span>
+                                            <span v-if="p.registrationSyncPending" class="block text-xs mt-1">Atualização da inscrição pendente. Tentaremos novamente automaticamente.</span>
+                                        </td>
                                         <td class="text-right">
                                             <div v-if="p.status === 'PENDING'" class="flex justify-end gap-1">
                                                 <button @click="simulatePaymentAction(p, 'confirm')" class="btn btn-xs btn-success text-white">Aprovar</button>

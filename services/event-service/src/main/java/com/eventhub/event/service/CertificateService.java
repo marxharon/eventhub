@@ -46,7 +46,7 @@ public class CertificateService {
         if (!Boolean.TRUE.equals(activity.getCompleted())) {
             return;
         }
-        if (activity.getStartTime() != null && LocalDateTime.now().isBefore(activity.getStartTime())) {
+        if (activity.getEndTime() == null || LocalDateTime.now().isBefore(activity.getEndTime())) {
             return;
         }
         if (certificateRepository.existsByRegistrationId(attendance.getRegistrationId())) {
@@ -79,10 +79,10 @@ public class CertificateService {
                     "RN06: A atividade ainda não foi concluída; o certificado não pode ser emitido."
             );
         }
-        if (activity.getStartTime() != null && LocalDateTime.now().isBefore(activity.getStartTime())) {
+        if (activity.getEndTime() == null || LocalDateTime.now().isBefore(activity.getEndTime())) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_ENTITY,
-                    "RN06: Não é possível emitir certificado para uma atividade futura antes de sua realização."
+                    "RN06: O certificado só pode ser emitido após o horário de término da atividade."
             );
         }
 

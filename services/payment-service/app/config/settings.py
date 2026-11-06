@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     registration_service_url: str = os.getenv("REGISTRATION_SERVICE_URL", "http://registration-service:8084")
     notification_service_url: str = os.getenv("NOTIFICATION_SERVICE_URL", "http://notification-service:8086")
     downstream_timeout_seconds: float = 1.5
+    reconciliation_interval_seconds: float = 5.0
     rabbitmq_host: str = os.getenv("RABBITMQ_HOST", "rabbitmq")
     rabbitmq_port: int = int(os.getenv("RABBITMQ_PORT", "5672"))
     rabbitmq_user: str = os.getenv("RABBITMQ_USER", "eventhub")
