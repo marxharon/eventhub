@@ -22,22 +22,22 @@ Suas responsabilidades principais são:
 
 ```mermaid
 flowchart LR
-    Browser["Navegador Web<br/>(SPA Vue 3 + Swagger UI)"] -->|HTTP :8080<br/>Tráfego Norte-Sul| GW["API Gateway<br/>(Nginx :80)"]
+    Browser["Navegador Web<br/>(SPA Vue 3 + Swagger UI)"] -->|"HTTP :8080<br/>Tráfego Norte-Sul"| GW["API Gateway<br/>(Nginx :80)"]
 
-    subgraph Rede Interna Docker ["Rede Docker: eventhub-net"]
-        GW -->|/api/users| US["1. user-service<br/>(Spring Boot :8081)"]
-        GW -->|/api/events| ES["2. event-service<br/>(Spring Boot :8082)"]
-        GW -->|/api/search| SS["3. search-service<br/>(FastAPI :8083)"]
-        GW -->|/api/registrations| RS["4. registration-service<br/>(Spring Boot :8084)"]
-        GW -->|/api/payments| PS["5. payment-service<br/>(FastAPI :8085)"]
-        GW -->|/api/notifications| NS["6. notification-service<br/>(FastAPI :8086)"]
+    subgraph DockerNet["Rede Docker: eventhub-net"]
+        GW -->|"/api/users"| US["1. user-service<br/>(Spring Boot :8081)"]
+        GW -->|"/api/events"| ES["2. event-service<br/>(Spring Boot :8082)"]
+        GW -->|"/api/search"| SS["3. search-service<br/>(FastAPI :8083)"]
+        GW -->|"/api/registrations"| RS["4. registration-service<br/>(Spring Boot :8084)"]
+        GW -->|"/api/payments"| PS["5. payment-service<br/>(FastAPI :8085)"]
+        GW -->|"/api/notifications"| NS["6. notification-service<br/>(FastAPI :8086)"]
 
-        ES -.->|POST /event/{id}/cancel-all| RS
-        ES -.->|POST /send| NS
-        RS -.->|POST /initiate<br/>POST /cancel-pending| PS
-        RS -.->|POST /send| NS
-        PS -.->|POST /payment-webhook| RS
-        PS -.->|POST /send| NS
+        ES -.->|"POST /event/:id/cancel-all"| RS
+        ES -.->|"POST /send"| NS
+        RS -.->|"POST /initiate<br/>POST /cancel-pending"| PS
+        RS -.->|"POST /send"| NS
+        PS -.->|"POST /payment-webhook"| RS
+        PS -.->|"POST /send"| NS
     end
 ```
 
