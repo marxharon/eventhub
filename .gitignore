@@ -23,3 +23,11 @@ venv/
 .vscode/
 .DS_Store
 Thumbs.db
+
+# Documentos locais de análise e planejamento (não versionar)
+ANALISE_ARQUITETURAL_CRITICA.md
+GUIA_IMPLEMENTACAO_MELHORIAS.md
+INDEX.md
+PLANO_CORRECAO_REQUISITOS.md
+SUMARIO_EXECUTIVO.md
+MATRIZ_CONFORMIDADE_VISUAL.md

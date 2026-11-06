@@ -16,8 +16,17 @@ spring:
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
+  rabbitmq:
+    host: ${RABBITMQ_HOST:rabbitmq}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER:eventhub}
+    password: ${RABBITMQ_PASSWORD:eventhub_secret_2026}
+    connection-timeout: 1500ms
 
 eventhub:
+  messaging:
+    enabled: ${MESSAGING_ENABLED:true}
+    exchange: eventhub.domain.events
   jwt:
     secret: ${JWT_SECRET:EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
   registration:
@@ -27,6 +36,29 @@ eventhub:
     payment-service-url: ${PAYMENT_SERVICE_URL:http://payment-service:8085}
     notification-service-url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8086}
     notification-timeout-ms: 1500
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      paymentServiceCB:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 6
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        permittedNumberOfCallsInHalfOpenState: 2
+      notificationServiceCB:
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 6
+        minimumNumberOfCalls: 3
+        failureRateThreshold: 50
+        waitDurationInOpenState: 15s
+        permittedNumberOfCallsInHalfOpenState: 2
+  retry:
+    instances:
+      paymentServiceRetry:
+        maxAttempts: 2
+        waitDuration: 250ms
 
 springdoc:
   api-docs:

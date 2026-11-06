@@ -1,6 +1,6 @@
-# API Gateway (Nginx) e Integração com os Microsserviços — EventHub
+# API Gateway (Nginx), Mensageria Assíncrona e Integração entre Microsserviços — EventHub
 
-Este documento explica como o **API Gateway** ([infra/gateway/nginx.conf](infra/gateway/nginx.conf)) é utilizado no **EventHub** para integrar a aplicação web SPA ([web-app/](web-app/index.html)) e o portal OpenAPI ([web-app/swagger.html](web-app/swagger.html)) aos 6 microsserviços de negócio, bem como a separação entre o tráfego externo (**Norte–Sul**) e a comunicação interna entre serviços (**Leste–Oeste**).
+Este documento explica como o **API Gateway** ([infra/gateway/nginx.conf](infra/gateway/nginx.conf)) é utilizado no **EventHub** para integrar a aplicação web SPA ([web-app/index.html](web-app/index.html)) e o portal OpenAPI ([web-app/swagger.html](web-app/swagger.html)) aos 6 microsserviços de negócio, bem como a separação entre o tráfego externo (**Norte–Sul**) e a comunicação interna entre serviços (**Leste–Oeste**), que combina **chamadas REST protegidas por Circuit Breaker Formal (Resilience4j / PyBreaker + Tenacity)** e **Publish/Subscribe Assíncrono via RabbitMQ com Dead Letter Queue (DLQ)**.
 
 ---
 
@@ -18,7 +18,7 @@ Suas responsabilidades principais são:
 
 ---
 
-## 2. Diagrama de Integração (Norte–Sul vs. Leste–Oeste)
+## 2. Diagrama de Integração (Norte–Sul vs. Leste–Oeste com Circuit Breaker e Pub/Sub RabbitMQ)
 
 ```mermaid
 flowchart LR
@@ -30,19 +30,28 @@ flowchart LR
         GW -->|"/api/search"| SS["3. search-service<br/>(FastAPI :8083)"]
         GW -->|"/api/registrations"| RS["4. registration-service<br/>(Spring Boot :8084)"]
         GW -->|"/api/payments"| PS["5. payment-service<br/>(FastAPI :8085)"]
-        GW -->|"/api/notifications"| NS["6. notification-service<br/>(FastAPI :8086)"]
+        GW -->|"/api/notifications"| NS["6. notification-service<br/>(FastAPI + Worker AMQP :8086)"]
 
-        ES -.->|"POST /event/:id/cancel-all"| RS
-        ES -.->|"POST /send"| NS
-        RS -.->|"POST /initiate<br/>POST /cancel-pending"| PS
-        RS -.->|"POST /send"| NS
-        PS -.->|"POST /payment-webhook"| RS
-        PS -.->|"POST /send"| NS
+        RMQ[["RabbitMQ 3.13 (:5672)<br/>Exchange: eventhub.domain.events<br/>Queue: eventhub.notifications.queue<br/>DLQ: eventhub.notifications.dlq"]]
+
+        ES -.->|"POST /event/:id/cancel-all<br/>[CircuitBreaker: registrationServiceCB]"| RS
+        RS -.->|"POST /initiate & /cancel-pending<br/>[CircuitBreaker: paymentServiceCB + Retry]"| PS
+        PS -.->|"POST /payment-webhook<br/>[PyBreaker + Tenacity Retry]"| RS
+
+        ES ==>|"Publish AFTER_COMMIT<br/>notification.event.*"| RMQ
+        RS ==>|"Publish AFTER_COMMIT<br/>notification.registration.*"| RMQ
+        PS ==>|"Publish AMQP<br/>notification.payment.*"| RMQ
+        RMQ ==>|"Consumo Assíncrono (aio-pika)<br/>ou NACK -> DLQ se 503"| NS
+
+        ES -.->|"Fallback HTTP (se Broker off)<br/>[CircuitBreaker: notificationServiceCB]"| NS
+        RS -.->|"Fallback HTTP (se Broker off)<br/>[CircuitBreaker: notificationServiceCB]"| NS
+        PS -.->|"Fallback HTTP (se Broker off)<br/>[PyBreaker: notification_cb]"| NS
     end
 ```
 
 - **Linhas contínuas (Tráfego Norte–Sul):** Requisições originadas na SPA ([web-app/js/api.js](web-app/js/api.js)), no laboratório ([web-app/js/lab-runner.js](web-app/js/lab-runner.js)) ou no Swagger UI ([web-app/swagger.html](web-app/swagger.html)) passam obrigatoriamente pelo API Gateway em `http://localhost:8080`.
-- **Linhas tracejadas (Tráfego Leste–Oeste):** Chamadas síncronas entre microsserviços utilizam diretamente o DNS interno do Docker (`http://<nome-do-servico>:<porta>`) na rede `eventhub-net`, sem passar pelo gateway.
+- **Setas duplas (Tráfego Leste–Oeste Assíncrono — Publish/Subscribe via RabbitMQ):** Os microsserviços `event-service`, `registration-service` (em fase `AFTER_COMMIT`, fora do lock pessimista) e `payment-service` publicam eventos de domínio na Topic Exchange `eventhub.domain.events` do container `eventhub-rabbitmq`. O `notification-service` consome a fila `eventhub.notifications.queue` assincronamente via `aio-pika` e, caso esteja em modo de falha simulada (`RN05`), rejeita a mensagem (`requeue=False`) encaminhando-a para a **Dead Letter Queue (`eventhub.notifications.dlq`)** sem perda de dados.
+- **Linhas tracejadas (Tráfego Leste–Oeste Síncrono Protegido por Circuit Breaker):** Chamadas REST síncronas entre microsserviços utilizam o DNS interno do Docker (`http://<nome-do-servico>:<porta>`) protegidas por **Resilience4j** (nos serviços Java) e **PyBreaker + Tenacity** (no `payment-service`), incluindo fallback automático Dual-Mode para HTTP caso o broker RabbitMQ esteja inacessível.
 
 ---
 
@@ -107,6 +116,32 @@ Cada requisição recebe um identificador único (`$request_id`) propagado aos m
 ---
 
 ## 5. Como a Aplicação Web (SPA) Consome o Gateway
+
+---
+
+## 6. Resiliência Leste–Oeste: Publish/Subscribe (RabbitMQ + DLQ) e Circuit Breaker Formal
+
+Enquanto o **API Gateway (Nginx)** protege a borda Norte–Sul contra indisponibilidade de containers (`502/503/504`), a comunicação interna **Leste–Oeste** conta com duas camadas complementares de resiliência:
+
+### 6.1. Mensageria Assíncrona Publish/Subscribe (`eventhub-rabbitmq`)
+- **Exchange de Eventos de Domínio:** `eventhub.domain.events` (`topic`, `durable=true`).
+- **Fila de Consumo:** `eventhub.notifications.queue` (`durable=true`), vinculada às routing keys `notification.#`, `event.#`, `registration.#` e `payment.#`.
+- **Dead Letter Exchange e Dead Letter Queue:** `eventhub.domain.dlx` $\rightarrow$ `eventhub.notifications.dlq` (`durable=true`).
+- **Publicação Pós-Commit (`AFTER_COMMIT`):**
+  - No `registration-service` ([ExternalIntegrationService.java](services/registration-service/src/main/java/com/eventhub/registration/service/ExternalIntegrationService.java)) e no `event-service` ([NotificationClient.java](services/event-service/src/main/java/com/eventhub/event/service/NotificationClient.java)), o envio de notificações é agendado via `TransactionSynchronization.afterCommit()`. Isso garante que o lock pessimista `SELECT ... FOR UPDATE` no PostgreSQL seja liberado imediatamente no commit da transação local, sem reter locks durante I/O de rede.
+- **Comportamento sob Simulação de Falha (`RN05` / `RQ03`):**
+  - Quando `POST /api/notifications/simulate-failure?fail=true` está ativo, o worker `aio-pika` ([amqp_consumer.py](services/notification-service/app/services/amqp_consumer.py)) rejeita a mensagem (`requeue=False`) e o RabbitMQ a transfere automaticamente para a fila `eventhub.notifications.dlq`, evitando perda de notificações sem impactar os fluxos principais.
+
+### 6.2. Circuit Breaker Formal e Retry com Backoff (Resilience4j e PyBreaker)
+
+| Serviço Origem | Serviço Destino | Componente / Classe | Instância de Circuit Breaker / Retry | Comportamento de Fallback / Abertura |
+|---|---|---|---|---|
+| `registration-service` (Java) | `payment-service` (Python) | [ExternalIntegrationService.java](services/registration-service/src/main/java/com/eventhub/registration/service/ExternalIntegrationService.java) | `@CircuitBreaker(name = "paymentServiceCB")` + `@Retry(name = "paymentServiceRetry")` | Faz até 2 tentativas (intervalo de `250ms`); com circuito `OPEN`, falha em $< 1\text{ms}$ e aciona a compensação `releaseAfterPaymentFailure` da reserva. |
+| `registration-service` (Java) | `notification-service` (Python) | [NotificationHttpFallbackClient.java](services/registration-service/src/main/java/com/eventhub/registration/service/NotificationHttpFallbackClient.java) | `@CircuitBreaker(name = "notificationServiceCB")` | Acionado caso o broker RabbitMQ esteja indisponível; abre após 50% de falhas em 6 chamadas (mínimo 3) e suprime o erro em $< 1\text{ms}$ (`RN05`). |
+| `event-service` (Java) | `registration-service` (Java) | [RegistrationIntegrationClient.java](services/event-service/src/main/java/com/eventhub/event/service/RegistrationIntegrationClient.java) | `@CircuitBreaker(name = "registrationServiceCB")` | Protege `POST /api/registrations/event/{id}/cancel-all`; quando `OPEN` ou em falha, executa imediatamente o fallback SQL local via `JdbcTemplate`. |
+| `event-service` (Java) | `notification-service` (Python) | [NotificationHttpFallbackClient.java](services/event-service/src/main/java/com/eventhub/event/service/NotificationHttpFallbackClient.java) | `@CircuitBreaker(name = "notificationServiceCB")` | Protege o fallback HTTP em atualizações/cancelamentos de eventos e emissão de certificados (`RN05`). |
+| `payment-service` (Python) | `registration-service` (Java) | [downstream_client.py](services/payment-service/app/services/downstream_client.py) | `pybreaker.CircuitBreaker("registration_webhook_cb")` + `tenacity.retry` | Realiza até 2 tentativas com backoff exponencial (`0.1s`–`0.3s`) ao chamar `/payment-webhook`; se falhar ou circuito abrir (`fail_max=4`), reverte o pagamento (`HTTP 424`). |
+| `payment-service` (Python) | `notification-service` (Python) | [downstream_client.py](services/payment-service/app/services/downstream_client.py) | `pybreaker.CircuitBreaker("notification_cb")` | Protege o fallback HTTP caso a publicação AMQP via `pika` não esteja disponível (`fail_max=3`, `reset_timeout=15s`). |
 
 No arquivo [web-app/js/api.js](web-app/js/api.js), todas as chamadas utilizam caminhos relativos à mesma origem do gateway (`/api/...`), anexando automaticamente o token JWT da sessão e medindo a latência e o `X-Correlation-ID` devolvidos pelo Nginx:
 

@@ -1,25 +1,47 @@
 # EventHub — Plataforma de Gestão de Eventos em Microsserviços
 
-O **EventHub** é uma plataforma web acadêmica e profissional para gerenciamento de eventos (congressos, seminários, workshops e minicursos), projetada e implementada sobre uma **arquitetura de microsserviços poliglota** (**Java 21 / Spring Boot 3** e **Python 3.12 / FastAPI**), utilizando um **API Gateway (Nginx)** e persistência relacional em instância única do **PostgreSQL 16** totalmente conteinerizada via **Docker Compose**.
+O **EventHub** é uma plataforma web acadêmica e profissional para gerenciamento de eventos (congressos, seminários, workshops e minicursos), projetada e implementada sobre uma **arquitetura de microsserviços poliglota** (**Java 21 / Spring Boot 3** e **Python 3.12 / FastAPI**), utilizando um **API Gateway (Nginx)**, **Mensageria Assíncrona Publish/Subscribe (RabbitMQ + Dead Letter Queue)**, **Circuit Breaker Formal (Resilience4j e PyBreaker + Tenacity)** e persistência relacional em instância única do **PostgreSQL 16** totalmente conteinerizada via **Docker Compose**.
 
 ---
 
 ## 1. Visão Geral da Arquitetura
 
-A solução adota o padrão **API Gateway + Orquestração REST Síncrona com Degradação Graciosa**, proporcionando baixa complexidade operacional, alto isolamento de responsabilidades e suporte completo às regras críticas de negócio (autenticação JWT por perfil, controle de vagas sob concorrência, lista de espera, pagamentos e notificações).
+A solução adota o padrão **API Gateway + Comunicação Híbrida (Publish/Subscribe Assíncrono via RabbitMQ e Orquestração REST Síncrona Protegida por Circuit Breaker)**, proporcionando alta resiliência, desacoplamento temporal, proteção *fail-fast* contra falhas em cascata e suporte completo às regras críticas de negócio (autenticação JWT por perfil, controle de vagas sob concorrência com *lock* pessimista liberado antes de I/O externo via `AFTER_COMMIT`, lista de espera, pagamentos e notificações com retenção em *Dead Letter Queue*).
 
-### Componentes e Microsserviços Implementados Até o Momento (Passos 1 a 10)
+### Componentes e Microsserviços Implementados
 
-| Componente / Serviço | Diretório | Tecnologia | Porta Interna | Status | Responsabilidades Implementadas |
+| Componente / Serviço | Diretório | Tecnologia | Porta Interna / Host | Status | Responsabilidades Implementadas |
 |---|---|---|---|---|---|
 | **Banco de Dados Único** | `infra/postgres/` | PostgreSQL 16 Alpine | `5432` | ✅ Implementado | Esquema relacional completo (`init.sql`), constraints de integridade/concorrência e carga inicial de dados (*seed*). |
+| **Message Broker (Pub/Sub)** | `docker-compose.yml` | RabbitMQ 3.13 Management Alpine | `5672` (AMQP) / `15672` (UI) | ✅ Implementado | Broker de eventos de domínio (`TopicExchange: eventhub.domain.events`), fila durável (`eventhub.notifications.queue`) e *Dead Letter Queue* (`eventhub.notifications.dlq` via `eventhub.domain.dlx`) para retenção sem perda em caso de falha (`RQ01`, `RQ03`, `RN05`). |
 | **API Gateway & Web App** | `infra/gateway/` e `web-app/` | Nginx 1.27 + Vue.js 3 + Tailwind/DaisyUI | `8080` (Host) | ✅ Implementado | Ponto único de entrada HTTP, roteamento reverso (`/api/*`) com fallback resiliente e entrega da SPA Web com menu contextual por perfil. |
 | **1. `user-service`** | `services/user-service/` | Java 21 / Spring Boot 3 | `8081` | ✅ Implementado | Cadastro de usuários (`BCrypt`), autenticação (`JWT`), manutenção de perfil e isolamento de permissões (`ORGANIZER` vs. `PARTICIPANT`, RN07). |
-| **2. `event-service`** | `services/event-service/` | Java 21 / Spring Boot 3 | `8082` | ✅ Implementado | Criação, edição, publicação e cancelamento de eventos (com encerramento de inscrições ativas e notificação aos inscritos); cadastro, edição (`RN01`) e conclusão de atividades da programação; registro de presença (*check-in*) e emissão/validação de certificados (RF02, RF03, RF08, RF09, RF10, RN06, RN07). |
+| **2. `event-service`** | `services/event-service/` | Java 21 / Spring Boot 3 | `8082` | ✅ Implementado | Criação, edição, publicação e cancelamento de eventos (com Circuit Breaker `registrationServiceCB` e fallback local no encerramento de inscrições, além de publicação assíncrona pós-commit no RabbitMQ); cadastro, edição (`RN01`) e conclusão de atividades; *check-in* e certificados (RF02, RF03, RF08, RF09, RF10, RN06, RN07). |
 | **3. `search-service`** | `services/search-service/` | Python 3.12 / FastAPI | `8083` | ✅ Implementado | Consulta otimizada de eventos publicados e busca direta de atividades (`GET /api/search/activities`), filtros por palavra-chave, organização, gratuidade e disponibilidade (`onlyAvailable`), com cálculo de saldo de vagas em tempo real descontando reservas `PENDING_PAYMENT` (RF04, RN02). |
-| **4. `registration-service`** | `services/registration-service/` | Java 21 / Spring Boot 3 | `8084` | ✅ Implementado | Solicitação, consulta e cancelamento de inscrições (restritas a eventos `PUBLISHED`), controle de concorrência (*lock* pessimista `FOR UPDATE`), lista de espera com promoção automática (`RN04`), expiração agendada (`RN02`/`RN03`), webhook de resultado de pagamento e relatórios gerenciais completos por evento (RF05, RF06, RF11). |
-| **5. `payment-service`** | `services/payment-service/` | Python 3.12 / FastAPI | `8085` | ✅ Implementado | Inicialização, confirmação, recusa, expiração e cancelamento automático de pagamentos pendentes; autenticação JWT e validação de titularidade (`RN07`); webhook para `registration-service` e aviso resiliente ao `notification-service` (RF07, RN02, RN03). |
-| **6. `notification-service`** | `services/notification-service/` | Python 3.12 / FastAPI | `8086` | ✅ Implementado | Envio e histórico de notificações (inscrição, confirmação, cancelamento, pagamento, promoção da fila, certificados e alterações/cancelamento de evento ou atividade), autenticação JWT (`RN07`) e simulação de indisponibilidade (`503`) sem bloquear operações críticas (RF08, RN05). |
+| **4. `registration-service`** | `services/registration-service/` | Java 21 / Spring Boot 3 | `8084` | ✅ Implementado | Solicitação, consulta e cancelamento de inscrições, controle de concorrência (*lock* pessimista `FOR UPDATE`), publicação de notificações em `AFTER_COMMIT` via RabbitMQ (com fallback HTTP protegido por Resilience4j `notificationServiceCB`), integração com pagamentos protegida por `@CircuitBreaker("paymentServiceCB")` + `@Retry`, lista de espera (`RN04`), expiração agendada (`RN02`/`RN03`) e relatórios (RF05, RF06, RF11). |
+| **5. `payment-service`** | `services/payment-service/` | Python 3.12 / FastAPI | `8085` | ✅ Implementado | Inicialização, confirmação, recusa, expiração e cancelamento de pagamentos; webhook para `registration-service` protegido por Circuit Breaker (`PyBreaker`) e Retry exponencial (`Tenacity`); publicação assíncrona de eventos de pagamento no RabbitMQ com fallback HTTP Dual-Mode (RF07, RN02, RN03). |
+| **6. `notification-service`** | `services/notification-service/` | Python 3.12 / FastAPI | `8086` | ✅ Implementado | Consumidor assíncrono RabbitMQ (`aio-pika` no `lifespan` do FastAPI) + API REST (`/send`), histórico de notificações, autenticação JWT (`RN07`) e simulação de indisponibilidade (`503`) que encaminha mensagens rejeitadas para a **DLQ (`eventhub.notifications.dlq`)** sem perda de eventos e sem bloquear operações críticas (RF08, RN05, RQ01, RQ03). |
+
+---
+
+## 1.1. Resiliência e Mensageria: Publish/Subscribe Assíncrono e Circuit Breaker
+
+O projeto implementa dois padrões centrais de robustez na comunicação Leste–Oeste (entre microsserviços):
+
+1. **Publish/Subscribe Assíncrono com RabbitMQ + Dead Letter Queue (DLQ) e `AFTER_COMMIT`:**
+   - **Topologia AMQP:** Os serviços produtores (`registration-service`, `event-service` e `payment-service`) publicam eventos de domínio JSON na Topic Exchange durável `eventhub.domain.events` (routing keys `notification.registration.*`, `notification.event.*`, `notification.payment.*`).
+   - **Desacoplamento do Lock Pessimista (`AFTER_COMMIT`):** Nos serviços Java (`registration-service` e `event-service`), o disparo da notificação é registrado via `TransactionSynchronizationManager.registerSynchronization(afterCommit)`, garantindo que o lock `SELECT ... FOR UPDATE` no PostgreSQL seja liberado imediatamente antes de qualquer I/O de rede.
+   - **Consumidor Assíncrono e DLQ:** O `notification-service` executa um worker `aio-pika` em background consumindo a fila `eventhub.notifications.queue`. Quando a simulação de falha (`RN05`) está ativa (`simulateFailure=true`), o consumidor rejeita a mensagem (`requeue=False`) e o RabbitMQ a roteia automaticamente via `eventhub.domain.dlx` para a **Dead Letter Queue (`eventhub.notifications.dlq`)**, garantindo **zero perda de mensagens**.
+   - **Operação Dual-Mode (Broker-First com Fallback HTTP):** Caso o broker RabbitMQ esteja indisponível ou pausado, todos os produtores fazem fallback automático e transparente para a chamada HTTP `POST /api/notifications/send` protegida por Circuit Breaker.
+
+2. **Circuit Breaker Formal e Retry com Backoff (Resilience4j + PyBreaker/Tenacity):**
+   - **Microsserviços Java (`registration-service` e `event-service` — Resilience4j 2.2.0):**
+     - `paymentServiceCB` + `paymentServiceRetry`: protege a criação e o cancelamento de pagamentos pendentes em `ExternalIntegrationService.java`.
+     - `registrationServiceCB`: protege o cancelamento em lote de inscrições (`cancelAllByEvent`) em `RegistrationIntegrationClient.java`, acionando o fallback SQL local imediatamente quando o circuito está `OPEN`.
+     - `notificationServiceCB`: protege o fallback HTTP de notificações (`NotificationHttpFallbackClient.java`), abrindo o circuito após 50% de falhas na janela deslizante e respondendo em $< 1\text{ms}$ (*fail-fast*).
+   - **Microsserviço Python (`payment-service` — PyBreaker 1.2.0 + Tenacity 9.0.0):**
+     - `registration_webhook_cb` + retry exponencial curto (`stop_after_attempt(2)`, `wait_exponential`): absorve falhas transitórias de rede na sincronização do webhook de pagamento (`POST /api/registrations/payment-webhook`).
+     - `notification_cb`: protege o fallback HTTP de notificações no `DownstreamClient`.
 
 ---
 
@@ -68,6 +90,7 @@ Com os containers em execução, acesse no navegador:
 
 - **Aplicação Web (SPA) e API Gateway**: [http://localhost:8080](http://localhost:8080)
 - **Portal Unificado Swagger UI / OpenAPI 3.0**: [http://localhost:8080/swagger.html](http://localhost:8080/swagger.html)
+- **Painel de Gerenciamento do RabbitMQ ( Filas, Exchanges e DLQ)**: [http://localhost:15672](http://localhost:15672) *(usuário: `eventhub` / senha: `eventhub_secret_2026`)*
 - **Healthcheck do Gateway**: [http://localhost:8080/health](http://localhost:8080/health)
 
 ### Documentação Interativa das APIs (Swagger / OpenAPI 3.0)
@@ -136,8 +159,9 @@ A aplicação inicia na **Tela de Login**. Utilize uma das contas abaixo (detalh
 ## 5. Documentação Arquitetural no Repositório
 
 - **[PLANO_PROJETO_EVENTHUB.md](PLANO_PROJETO_EVENTHUB.md)**: Plano completo do projeto, matriz de rastreabilidade (`RF`, `RN`, `RQ`) e roteiro de implementação incremental em 10 *baby steps* autocontidos.
+- **[plano_atualizacao_arquitetura.md](plano_atualizacao_arquitetura.md)**: Plano incremental em 8 *baby steps* executado para adicionar **Publish/Subscribe Assíncrono (RabbitMQ + DLQ)** e **Circuit Breaker Formal (Resilience4j + PyBreaker/Tenacity)** sem quebrar contratos existentes.
 - **[design_arquitetural.md](design_arquitetural.md)**: Documento de *Architectural Design* contendo análise de domínio, limites de contexto (DDD), diagramas C4 (Contexto e Containers), matriz de propriedade de dados, contratos REST, fluxos de exceção e **4 ADRs** (*Architectural Decision Records*).
-- **[GATEWAY_INTEGRACAO.md](GATEWAY_INTEGRACAO.md)**: Explicação detalhada de como o **API Gateway (Nginx)** integra a aplicação web (SPA) e o portal Swagger aos microsserviços (roteamento reverso, fallback resiliente, segurança de borda, correlação `X-Correlation-ID` e separação entre tráfego Norte–Sul e Leste–Oeste).
+- **[GATEWAY_INTEGRACAO.md](GATEWAY_INTEGRACAO.md)**: Explicação detalhada de como o **API Gateway (Nginx)** integra a aplicação web (SPA) e o portal Swagger aos microsserviços, bem como a separação entre tráfego Norte–Sul e a comunicação Leste–Oeste (REST com Circuit Breaker + Mensageria Assíncrona RabbitMQ com DLQ).
 - **[USUARIOS_INICIAIS.md](USUARIOS_INICIAIS.md)**: Guia rápido com os usuários iniciais para teste por perfil de acesso.
 - **[CASOS_DE_TESTE.md](CASOS_DE_TESTE.md)**: Casos de teste passo a passo para cada microsserviço, executados pela aplicação web (SPA), com resultados esperados e alternativas via Swagger ou Chaos Lab.
 

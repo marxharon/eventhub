@@ -20,6 +20,24 @@ services:
     networks:
       - eventhub-net
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: eventhub-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-eventhub}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-eventhub_secret_2026}
+    ports:
+      - "${RABBITMQ_PORT:-5672}:5672"
+      - "${RABBITMQ_MGMT_PORT:-15672}:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - eventhub-net
+
   api-gateway:
     image: nginx:1.27-alpine
     container_name: eventhub-gateway
@@ -78,6 +96,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
       REGISTRATION_SERVICE_URL: http://registration-service:8084
       NOTIFICATION_SERVICE_URL: http://notification-service:8086
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-eventhub}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-eventhub_secret_2026}
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -125,6 +148,11 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-eventhub}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-eventhub_secret_2026}
       JWT_SECRET: ${JWT_SECRET:-EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-eventhub}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-eventhub_secret_2026}
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -151,6 +179,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
       REGISTRATION_SERVICE_URL: http://registration-service:8084
       NOTIFICATION_SERVICE_URL: http://notification-service:8086
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-eventhub}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-eventhub_secret_2026}
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
@@ -177,6 +210,11 @@ services:
       JWT_SECRET: ${JWT_SECRET:-EventHubSuperSecretKeyForJwtAuthentication2026MicroservicesArchitecture}
       PAYMENT_SERVICE_URL: http://payment-service:8085
       NOTIFICATION_SERVICE_URL: http://notification-service:8086
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USER: ${RABBITMQ_USER:-eventhub}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD:-eventhub_secret_2026}
+      MESSAGING_ENABLED: ${MESSAGING_ENABLED:-true}
     depends_on:
       postgres:
         condition: service_healthy
