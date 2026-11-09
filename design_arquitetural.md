@@ -198,11 +198,11 @@ A tabela a seguir sintetiza a avaliação dos padrões arquiteturais candidatos 
 | Padrão Arquitetural | Avaliação Técnica no Cenário EventHub | Decisão | Justificativa Baseada em Forças e Trade-offs |
 |---|---|---|---|
 | **API Gateway** | Unifica o ponto de entrada (`:8080`) para os 6 microsserviços e hospeda a Web App SPA, centralizando roteamento e cabeçalhos de rastreamento. | **ADOTADO** *(Nginx Reverse Proxy)* | Simplifica drasticamente o frontend Web (sem CORS e sem conhecer múltiplas portas) com custo de configuração mínimo (`nginx.conf`). |
-| **Circuit Breaker / Graceful Degradation** | Protege o fluxo de inscrição contra falhas ou lentidão no `notification-service` (RN05, RQ03). | **ADOTADO (Simplificado)** *(Timeout Curto 1.5s + Fallback Local)* | Cumpre 100% de RN05 e RQ03 usando recursos nativos do `RestTemplate`/`RestClient` (Java) e `httpx` (Python), sem exigir malha de serviço (Istio) ou configuração complexa de *sliding windows*. |
-| **Saga (Orquestração vs. Coreografia)** | Coordena a reserva de vaga no `registration-service` e o pagamento no `payment-service` (RN02, RN03). | **ADOTADO (Simplificado)** *(Saga Síncrona via REST Callback + Compensação)* | O `registration-service` reserva a vaga (`PENDING_PAYMENT`) e o `payment-service` executa o callback confirmando (`CONFIRMED`) ou disparando a **transação compensatória** de liberação da vaga (`REFUSED`/`EXPIRED`). Evita máquinas de estado baseadas em eventos. |
-| **Publish / Subscribe** | Desacoplamento assíncrono via Message Broker (RabbitMQ/Kafka) para notificações e eventos de domínio. | **DESCARTADO** | Adicionaria alta complexidade operacional (container extra de broker, serialização de mensagens, *dead-letter queues*, depuração assíncrona) sem ganho indispensável para o escopo do protótipo. |
-| **Database per Service vs. Shared Database** | Isolamento físico vs. banco PostgreSQL único compartilhado. | **ADOTADO: Banco PostgreSQL Único c/ Propriedade Lógica** | Atende à restrição do projeto de usar um único PostgreSQL, reduzindo drasticamente o consumo de RAM no Docker Compose (RQ08) e permitindo lock pessimista ACID na disputa de vagas (RN01). |
-| **Transactional Outbox** | Garante publicação atômica de eventos em um Message Broker junto com o commit no banco. | **DESCARTADO** | Como o padrão *Publish/Subscribe* foi descartado e o estado é sincronizado via chamadas REST idempotentes sobre banco ACID único, uma tabela *Outbox* com *poller* em background seria *overengineering*. |
+| **Circuit Breaker Formal e Retry** | Protege o tráfego Leste–Oeste síncrono contra falhas em cascata e lentidão em dependências críticas (`payment-service`, webhook e fallback de notificações). | **ADOTADO** *(Resilience4j no Java + PyBreaker e Tenacity no Python)* | Implementa máquinas de estado formais (`CLOSED`, `OPEN`, `HALF_OPEN`) com *fail-fast* (< 1ms) e retries exponenciais, isolando indisponibilidades transitórias (RN05, RQ03, ADR-05). |
+| **Publish / Subscribe com Message Broker & DLQ** | Desacoplamento temporal e assíncrono para notificações e eventos de domínio via RabbitMQ, com Dead Letter Queue (`DLQ`) para retenção de mensagens rejeitadas. | **ADOTADO** *(RabbitMQ 3.13 TopicExchange + DLQ + worker aio-pika)* | Garante *zero message loss* em caso de indisponibilidade de notificações (`RN05`, `RQ01`, `RQ03`), mantendo padrão *Dual-Mode* (broker-first com fallback HTTP) e desacoplando locks de banco com `AFTER_COMMIT` (ADR-05). |
+| **Saga (Orquestração vs. Coreografia)** | Coordena a reserva de vaga no `registration-service` e o pagamento no `payment-service` (RN02, RN03). | **ADOTADO (Simplificado)** *(Saga Síncrona via REST Callback + Compensação)* | O `registration-service` reserva a vaga (`PENDING_PAYMENT`) e o `payment-service` executa o callback confirmando (`CONFIRMED`) ou disparando a **transação compensatória** de liberação da vaga (`REFUSED`/`EXPIRED`). Evita máquinas de estado baseadas em eventos para o fluxo financeiro principal. |
+| **Database per Service vs. Shared Database** | Isolamento físico vs. banco PostgreSQL único compartilhado. | **ADOTADO: Banco PostgreSQL Único c/ Propriedade Lógica** | Atende à restrição do projeto de usar um único PostgreSQL, reduzindo drasticamente o consumo de RAM no Docker Compose (RQ08) e permitindo lock pessimista ACID na disputa de vagas (RN01, ADR-02). |
+| **Transactional Outbox** | Garante publicação atômica de eventos em um Message Broker junto com o commit no banco. | **SUBSTITUÍDO POR `AFTER_COMMIT` NATIVO + DUAL-MODE** | A publicação de eventos AMQP é registrada via `TransactionSynchronizationManager.registerSynchronization(afterCommit)` nos serviços Spring Boot, liberando o lock de banco antes de qualquer I/O externo e contando com fallback HTTP protegido por Circuit Breaker caso o broker esteja indisponível, eliminando a complexidade de tabelas outbox e polling. |
 
 ---
 
@@ -288,21 +288,22 @@ sequenceDiagram
 
 3. **Caso 3 — Indisponibilidade de Dependências (`notification-service` ou `payment-service` fora do ar)**:
    - **Indisponibilidade do `notification-service` (`RN05`, `RQ03`)**:
-     - Se o container `notification-service` estiver desligado, lento (acima de `1.5s`) ou retornando `503 Service Unavailable` (modo de falha simulada), o bloco `try/catch` no `ExternalIntegrationService` do `registration-service` (e no `payment-service`) captura a exceção HTTP, registra um log estruturado (`WARN: Notification service unavailable, proceeding with core operation`) e **conclui a transação normalmente**. A inscrição permanece `CONFIRMED` e o pagamento permanece `APPROVED`.
+     - *Modo Assíncrono com RabbitMQ (Nominal)*: O `registration-service`, `event-service` e `payment-service` publicam eventos na Topic Exchange `eventhub.domain.events` após a efetivação transacional (`AFTER_COMMIT`). O consumidor `aio-pika` no `notification-service` consome a fila `eventhub.notifications.queue`. Quando a simulação de falha (`simulateFailure=true` / `503`) está ativa, o consumidor rejeita a mensagem (`requeue=False`), fazendo com que o broker a encaminhe automaticamente via Dead Letter Exchange (`eventhub.domain.dlx`) para a **`eventhub.notifications.dlq`**, assegurando **zero perda de dados** sem interromper ou atrasar o fluxo de inscrições e pagamentos.
+     - *Modo Fallback HTTP Dual-Mode*: Caso o broker RabbitMQ esteja indisponível, os produtores executam fallback automático para a chamada REST `POST /api/notifications/send`, que é protegida por Circuit Breaker (**Resilience4j** `notificationServiceCB` no Java e **PyBreaker** `notification_cb` no Python). Se o serviço de notificações estiver offline ou lento (timeout 1.5s), o circuito abre em modo *fail-fast* (< 1ms), permitindo que a inscrição permaneça `CONFIRMED` e o pagamento `APPROVED` sem travar a aplicação.
    - **Indisponibilidade do `payment-service` durante inscrição paga (`RQ04`)**:
-     - Se o `payment-service` estiver inacessível no exato momento em que o participante tenta se inscrever em uma atividade **paga**, o `registration-service` captura a falha na criação da cobrança e reverte a reserva (ou libera a vaga imediatamente), retornando `503 Service Unavailable` ao usuário para que nenhuma vaga fique presa eternamente em `PENDING_PAYMENT` sem uma cobrança associada. Enquanto isso, inscrições em **atividades gratuitas** continuam funcionando normalmente (`100% disponíveis`), pois não dependem do `payment-service`.
+     - Se o `payment-service` estiver inacessível no exato momento em que o participante tenta se inscrever em uma atividade **paga**, o `registration-service` (protegido por `@CircuitBreaker(name = "paymentServiceCB")`) captura a falha e reverte a reserva (liberando a vaga imediatamente), retornando `503 Service Unavailable` ao usuário para que nenhuma vaga fique presa eternamente em `PENDING_PAYMENT` sem uma cobrança associada. Enquanto isso, inscrições em **atividades gratuitas** continuam funcionando normalmente (`100% disponíveis`), pois não dependem do `payment-service`.
 
 ---
 
 ## 7. Architectural Decision Records (ADRs)
 
-A seguir estão registradas as **4 ADRs** fundamentais do projeto, documentando contexto, alternativas consideradas, decisão tomada, evidências técnicas, justificativa e consequências (trade-offs).
+A seguir estão registradas as **5 ADRs** fundamentais do projeto, documentando contexto, alternativas consideradas, decisão tomada, evidências técnicas, justificativa e consequências (trade-offs).
 
 ---
 
-### ADR-01: Adoção de API Gateway (Nginx) e Orquestração REST Síncrona com Degradação Graciosa em vez de Mensageria Assíncrona
+### ADR-01: Adoção de API Gateway (Nginx) e Orquestração REST Síncrona Inicial com Degradação Graciosa
 
-- **Status**: Aceita
+- **Status**: Aceita (Evoluída e complementada pela ADR-05 para comunicação híbrida Leste–Oeste com Publish/Subscribe e Circuit Breaker)
 - **Contexto**:
   - O sistema possui 6 microsserviços implementados em duas stacks (Java/Spring Boot e Python/FastAPI) consumidos por uma Aplicação Web SPA.
   - É necessário integrar o fluxo de inscrição, pagamento e notificação garantindo que a indisponibilidade do serviço de notificações não afete operações críticas (RN05, RQ03), mantendo a menor complexidade arquitetural e operacional possível (RQ08).
@@ -380,3 +381,65 @@ A seguir estão registradas as **4 ADRs** fundamentais do projeto, documentando 
 - **Consequências**:
   - *Positivas*: Aproveita os pontos fortes de cada ecossistema; comprova na prática a interoperabilidade tecnológica via REST/JSON (RQ05) em fluxos que cruzam Java → Python → Java.
   - *Negativas / Trade-offs*: A equipe precisa manter dois conjuntos de imagens base Docker (`maven/eclipse-temurin:21` e `python:3.12-slim`) e duas bibliotecas de mapeamento objeto-relacional (Hibernate/JPA e SQLAlchemy).
+
+---
+
+### ADR-05: Adoção de Arquitetura de Comunicação Híbrida Leste–Oeste: Publish/Subscribe Assíncrono (RabbitMQ + Dead Letter Queue) e Circuit Breaker Formal (Resilience4j + PyBreaker/Tenacity)
+
+- **Status**: Aceita (Evolução direta da ADR-01 para comunicação entre microsserviços)
+- **Contexto**:
+  - Na fase inicial do projeto (ADR-01), optou-se por orquestração síncrona REST com degradação graciosa em bloco `try/catch` para notificações (RN05, RQ03), visando rápida reprodutibilidade em Docker Compose com menor quantidade inicial de componentes de infraestrutura.
+  - Conforme o protótipo evoluiu e foi submetido a testes de estresse concorrente e injeção de falhas (Parte III — Item 8 do enunciado da Wave 4), emergiram duas limitações críticas do modelo puramente síncrono:
+    1. **Risco de perda de mensagens durante indisponibilidades prolongadas (RN05, RQ01, RQ03)**: Quando o `notification-service` ficava temporariamente fora do ar ou em modo de falha simulada (503), os comunicados eram capturados em `try/catch` e gravados apenas no log local de erro (`WARN`) dos serviços chamadores, sem reprocessamento posterior garantido (*zero delivery guarantee*).
+    2. **Contenção transacional no banco e risco de falhas em cascata (RN01, RQ04)**: No fluxo crítico de inscrição, o participante obtém um bloqueio pessimista (`SELECT ... FOR UPDATE`) sobre a atividade no PostgreSQL. Executar I/O remoto síncrono mantendo o lock aberto ou aguardando timeouts cumulativos de serviços dependentes (`notification-service`, `payment-service`) degrada severamente a vazão de concorrência e pode esgotar o pool de conexões e threads do Tomcat e Uvicorn (*cascading failure*), sem uma máquina de estados formal (*fail-fast*) que rejeite chamadas degradadas em $<1\text{ms}$.
+  - Faz-se necessário adotar mecanismos formais de resiliência e desacoplamento assíncrono que garantam **entrega confiável sem bloqueio** e **proteção de circuito**, mantendo a execução fluida em ambiente local.
+- **Alternativas Consideradas**:
+  1. **Manter REST Síncrono com Loop de Retentativas em Memória (Retry Simples)**:
+     - *Avaliação*: Retentativas síncronas contra um serviço lento ou fora do ar sobrecarregam ainda mais as threads do chamador, aumentam a contenção no banco e disparam tempestades de requisições (*retry storms*), sem garantir que eventos gerados durante quedas de minutos sejam recuperados.
+  2. **Migração Global para Apache Kafka + Event Sourcing + Transactional Outbox**:
+     - *Avaliação*: Kafka com conectores Outbox/Debezium adiciona severa complexidade operacional e consumo de memória excessivo (violando a restrição de execução leve do RQ08), além de desnecessariamente alterar a semântica síncrona esperada na consulta de vagas e reserva imediata.
+  3. **Padrão Híbrido: Publish/Subscribe Assíncrono com RabbitMQ (TopicExchange + DLQ) + Orquestração Síncrona Protegida por Circuit Breakers Formais (Resilience4j e PyBreaker/Tenacity) e Padrão Dual-Mode (Broker-First com Fallback HTTP)**:
+     - *Avaliação*: Utilizar um message broker leve (**RabbitMQ 3.13**) para trafegar eventos de domínio (`eventhub.domain.events`), com uma **Dead Letter Queue (`eventhub.notifications.dlq`)** para reter sem perda as mensagens rejeitadas durante falhas do consumidor.
+     - Isolar o lock pessimista transacional disparando a publicação de eventos apenas na fase `AFTER_COMMIT` (`TransactionSynchronizationManager`) nos serviços Java.
+     - Proteger as integrações síncronas restantes (`registration-service` $\leftrightarrow$ `payment-service`) com Circuit Breakers formais (Resilience4j no Spring Boot e PyBreaker no FastAPI) e retries exponenciais curtos.
+     - Adotar a estratégia *Dual-Mode*: caso o RabbitMQ esteja inacessível ou desabilitado, os produtores realizam fallback transparente e automático para chamadas REST protegidas pelo Circuit Breaker.
+- **Decisão**:
+  - Adotar a **Alternativa 3**, implementando a arquitetura híbrida de mensageria assíncrona com DLQ e Circuit Breaker formal entre os microsserviços.
+  - **Especificação Técnica da Implementação**:
+    - **Infraestrutura AMQP (`docker-compose.yml`)**:
+      - Container `eventhub-rabbitmq` (`rabbitmq:3.13-management-alpine`) na porta `5672` (AMQP) e `15672` (Management UI).
+      - Topic Exchange durável `eventhub.domain.events`.
+      - Dead Letter Exchange (DLX) `eventhub.domain.dlx` (tipo `direct`).
+      - Fila durável `eventhub.notifications.queue` configurada com argumentos de dead-letter: `x-dead-letter-exchange = "eventhub.domain.dlx"` e `x-dead-letter-routing-key = "notification.dlq"`.
+      - Fila durável de retenção `eventhub.notifications.dlq` vinculada à DLX com routing key `notification.dlq`.
+      - Routing keys dos produtores: `notification.registration.*` (`registration-service`), `notification.event.*` (`event-service`) e `notification.payment.*` (`payment-service`).
+    - **Desacoplamento do Lock Transacional (`AFTER_COMMIT`)**:
+      - Nos serviços Spring Boot, a publicação AMQP é encapsulada em `TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() { void afterCommit() { ... } })`. O lock pessimista `SELECT ... FOR UPDATE` no PostgreSQL é comitado e liberado antes de qualquer transmissão na rede.
+    - **Consumo Assíncrono e Rejeição para DLQ no `notification-service`**:
+      - Worker assíncrono em background utilizando `aio-pika` instanciado no ciclo de vida `lifespan` do FastAPI.
+      - Quando o switch de falha simulada (`RN05`) está ativo (`simulate_failure = true`), o consumidor rejeita explicitamente a mensagem com `message.nack(requeue=False)`. O RabbitMQ encaminha o evento para a `eventhub.notifications.dlq`, preservando 100% dos dados para auditoria ou reprocessamento posterior.
+    - **Circuit Breakers Formais e Retries**:
+      - **Java 21 / Spring Boot 3 (Resilience4j 2.2.0)**:
+        - `paymentServiceCB`: protege a iniciação e cancelamento de pagamentos em `ExternalIntegrationService`, abrindo com taxa de falha de 50%, sliding window de 10 requisições e 5 segundos de espera no estado `OPEN`.
+        - `paymentServiceRetry`: 2 tentativas com backoff exponencial antes de propagar erro.
+        - `registrationServiceCB`: protege o cancelamento em lote de inscrições em `RegistrationIntegrationClient`, acionando fallback SQL local imediato quando o circuito estiver aberto.
+        - `notificationServiceCB`: protege o fallback HTTP de notificações em `NotificationHttpFallbackClient`, respondendo em $<1\text{ms}$ (*fail-fast*) quando o circuito está aberto.
+      - **Python 3.12 / FastAPI (PyBreaker 1.2.0 + Tenacity 9.0.0)**:
+        - `registration_webhook_cb`: `CircuitBreaker(fail_max=3, reset_timeout=10)` no `DownstreamClient` do `payment-service`, evitando travamento de conexões na sincronização com o `registration-service`.
+        - `Tenacity`: `@retry(stop=stop_after_attempt(2), wait=wait_exponential(multiplier=0.2, min=0.2, max=1.0))` para absorver transientes rápidos de rede.
+- **Evidências e Justificativa**:
+  - **Zero Perda de Mensagens com Simulação de Indisponibilidade (RN05, RQ03)**: Nos testes com falha ativada (`POST /api/notifications/simulate-failure?fail=true`), o fluxo principal de inscrições e pagamentos continua sendo concluído com sucesso e latência normal (< 200ms). Ao consultar a fila de dead-letter no RabbitMQ (`http://localhost:15672`), constata-se a chegada de 100% dos eventos rejeitados na fila `eventhub.notifications.dlq`, comprovando o isolamento do serviço de notificações sem descarte de avisos.
+  - **Minimização do Tempo de Lock em Alta Concorrência (RN01, RQ02, RQ04)**: O envio de eventos AMQP exclusivamente em `AFTER_COMMIT` impede que a latência de mensageria impacte a transação do banco. A disputa de vagas permanece serializada pelo tempo estrito do `UPDATE` de slots (< 5ms), viabilizando vazão de dezenas de inscrições simultâneas sem deadlocks.
+  - **Proteção contra Falhas em Cascata (Fail-Fast)**: Em caso de lentidão induzida ou queda do `payment-service`, a transição de estado dos Circuit Breakers para `OPEN` rejeita requisições subsequentes em menos de 1ms, preservando a estabilidade dos pools de threads e workers dos serviços centrais.
+  - **Operabilidade e Alta Disponibilidade Dual-Mode**: Se o container do RabbitMQ for temporariamente paralisado, todos os serviços produtores chaveiam automaticamente para a chamada HTTP direta protegida por Circuit Breaker, assegurando que o sistema continue operando mesmo sob falha do próprio broker.
+- **Consequências**:
+  - *Positivas*:
+    - Desacoplamento temporal completo e garantia de não bloqueio das operações essenciais (RN05, RQ01, RQ03).
+    - Tolerância a falhas robusta com armazenamento durável em DLQ para reprocessamento futuro.
+    - Prevenção formal de falhas em cascata com tempos de resposta submilisegundo em modo degradado (*fail-fast*).
+    - Zero impacto na integridade e velocidade do bloqueio pessimista ACID de vagas (RN01).
+    - Interoperabilidade poliglota comprovada na prática: produtores em Spring Boot (Java) e FastAPI (Python) comunicando-se com consumidor em FastAPI via AMQP padrão.
+  - *Negativas / Trade-offs*:
+    - Adição de um container adicional de infraestrutura (`eventhub-rabbitmq`), consumindo cerca de 80MB a 100MB de RAM.
+    - Consistência eventual na percepção do usuário: a confirmação da vaga no banco é instantânea, porém a entrega e renderização da notificação na interface pode ocorrer com um atraso de alguns milissegundos a poucos segundos.
+    - Maior número de variáveis operacionais a monitorar (tamanho das filas, mensagens na DLQ, taxas de reconexão AMQP e métricas de actuator dos Circuit Breakers).
