@@ -154,7 +154,8 @@ public class RegistrationService {
                     Locked locked = lockRegistration(id);
                     Registration reg = locked.registration();
                     if (reg.getStatus() == RegistrationStatus.PENDING_PAYMENT
-                            && reg.getExpiresAt() != null && reg.getExpiresAt().isBefore(now)) {
+                            && reg.getExpiresAt() != null && reg.getExpiresAt().isBefore(now)
+                            && !registrationRepository.hasApprovedPayment(id)) {
                         closeRegistration(locked.activity(), reg, RegistrationStatus.EXPIRED);
                     }
                 });

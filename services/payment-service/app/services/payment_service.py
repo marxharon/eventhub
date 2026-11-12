@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from typing import List
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
@@ -20,6 +21,7 @@ class PaymentService:
             userId=model.user_id,
             amount=float(model.amount),
             status=model.status,
+            registrationSyncPending=model.registration_sync_pending,
             providerRef=model.provider_ref,
             createdAt=model.created_at,
             updatedAt=model.updated_at,
@@ -34,22 +36,19 @@ class PaymentService:
 
     def confirm(self, payment_id: int, current_user: dict | None = None) -> PaymentResponse:
         return self._transition(
-            payment_id, "APPROVED", "PAYMENT_APPROVED",
-            "Pagamento aprovado. Sua inscrição foi confirmada.",
+            payment_id, "APPROVED",
             current_user=current_user,
         )
 
     def refuse(self, payment_id: int, current_user: dict | None = None) -> PaymentResponse:
         return self._transition(
-            payment_id, "REFUSED", "PAYMENT_REFUSED",
-            "Pagamento recusado. A vaga reservada foi liberada.",
+            payment_id, "REFUSED",
             current_user=current_user,
         )
 
     def expire(self, payment_id: int, current_user: dict | None = None) -> PaymentResponse:
         return self._transition(
-            payment_id, "EXPIRED", "PAYMENT_EXPIRED",
-            "Prazo de pagamento expirado. A vaga reservada foi liberada.",
+            payment_id, "EXPIRED",
             current_user=current_user,
         )
 
@@ -71,43 +70,62 @@ class PaymentService:
         self,
         payment_id: int,
         new_status: str,
-        event_type: str,
-        message: str,
         current_user: dict | None = None,
     ) -> PaymentResponse:
-        payment = self.repository.find_by_id(payment_id)
+        payment, registration = self.repository.lock_for_transition(payment_id)
         if payment is None:
+            self.repository.finish_read()
             raise HTTPException(status_code=404, detail="Pagamento não encontrado.")
         if (
             current_user is not None
             and current_user.get("role") != "ORGANIZER"
             and int(payment.user_id) != int(current_user["userId"])
         ):
+            self.repository.finish_read()
             raise HTTPException(
                 status_code=403,
                 detail="RN07 Violada: Participantes podem operar apenas seus próprios pagamentos.",
             )
         if payment.status != "PENDING":
-            raise HTTPException(
-                status_code=409,
-                detail=f"Transição inválida: pagamento já está em {payment.status}.",
-            )
+            previous = payment.status
+            self.repository.finish_read()
+            if previous != new_status:
+                raise HTTPException(status_code=409, detail=f"Transição inválida: pagamento já está em {previous}.")
+            # Same result is safe to repeat, including after a lost response.
+            self.deliver_result(payment_id)
+            return self._to_schema(self.repository.find_by_id(payment_id))
 
-        previous_status = payment.status
-        payment = self.repository.update_status(payment, new_status)
+        if registration.status != "PENDING_PAYMENT" or (
+            new_status == "APPROVED" and registration.expires_at is not None
+            and registration.expires_at <= datetime.now()
+        ):
+            self.repository.finish_read()
+            raise HTTPException(status_code=409, detail="Inscrição encerrada ou reserva vencida.")
 
-        # Consistência entre pagamento e inscrição (RN02/RN03): se o registration-service não confirmar,
-        # reverte-se o pagamento para evitar que o pagamento fique aprovado com a inscrição pendente.
-        if not DownstreamClient.notify_registration(payment.registration_id, payment.id, new_status):
-            self.repository.update_status(payment, previous_status)
-            raise HTTPException(
-                status_code=424,
-                detail="Serviço de inscrições indisponível para sincronizar o status do pagamento. Operação revertida.",
-            )
+        payment = self.repository.save_result_for_delivery(payment, new_status)
+        self.deliver_result(payment_id)
 
-        # Notificação ao usuário é não-bloqueante (RN05).
-        email = self.repository.find_user_email(payment.user_id)
-        if email:
-            DownstreamClient.send_notification(payment.user_id, email, event_type, message)
+        return self._to_schema(self.repository.find_by_id(payment_id))
 
-        return self._to_schema(payment)
+    def deliver_result(self, payment_id: int) -> bool:
+        payment = self.repository.find_by_id(payment_id)
+        if payment is None or not payment.registration_sync_pending:
+            return True
+        delivered = DownstreamClient.notify_registration(payment.registration_id, payment.id, payment.status)
+        # A user cancellation/expiry must not be resurrected by a delayed callback.
+        # Preserve the payment result for accounting; only stop delivery to the closed registration.
+        if delivered or self.repository.registration_is_closed(payment.registration_id):
+            self.repository.mark_delivered(payment.id, payment.status)
+            if delivered:
+                # Do not announce a confirmed registration before its callback is acknowledged.
+                messages = {
+                    "APPROVED": "Pagamento aprovado. Sua inscrição foi confirmada.",
+                    "REFUSED": "Pagamento recusado. A vaga reservada foi liberada.",
+                    "EXPIRED": "Prazo de pagamento expirado. A vaga reservada foi liberada.",
+                }
+                email = self.repository.find_user_email(payment.user_id)
+                if email:
+                    DownstreamClient.send_notification(payment.user_id, email,
+                                                       "PAYMENT_" + payment.status, messages[payment.status])
+            return True
+        return False

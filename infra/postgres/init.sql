@@ -93,6 +93,9 @@ CREATE TABLE IF NOT EXISTS payments (
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Durable callback pending flag; also applied at payment-service startup for existing volumes.
+ALTER TABLE payments ADD COLUMN IF NOT EXISTS registration_sync_pending BOOLEAN NOT NULL DEFAULT FALSE;
+
 -- 8. TABELA DE NOTIFICAÇÕES (Proprietário: notification-service | RF08, RN05)
 CREATE TABLE IF NOT EXISTS notifications (
     id BIGSERIAL PRIMARY KEY,

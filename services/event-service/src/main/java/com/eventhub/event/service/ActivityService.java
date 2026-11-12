@@ -150,10 +150,10 @@ public class ActivityService {
                     "RN06: Somente atividades de eventos publicados podem ser concluídas."
             );
         }
-        if (activity.getStartTime() != null && LocalDateTime.now().isBefore(activity.getStartTime())) {
+        if (activity.getEndTime() == null || LocalDateTime.now().isBefore(activity.getEndTime())) {
             throw new ResponseStatusException(
                     HttpStatus.UNPROCESSABLE_ENTITY,
-                    "RN06: Não é possível marcar como concluída uma atividade futura antes do seu horário de início (" + activity.getStartTime() + ")."
+                    "RN06: A atividade só pode ser concluída após seu horário de término (" + activity.getEndTime() + ")."
             );
         }
 

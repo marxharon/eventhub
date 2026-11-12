@@ -33,6 +33,10 @@ public interface RegistrationRepository extends JpaRepository<Registration, Long
     @Query("select r.id from Registration r where r.status = :status and r.expiresAt < :now")
     List<Long> findExpiredIds(@Param("status") RegistrationStatus status, @Param("now") LocalDateTime now);
 
+    // Exceptional read of the payment result prevents expiry while its callback is being recovered.
+    @Query(value = "SELECT EXISTS (SELECT 1 FROM payments WHERE registration_id = :id AND status = 'APPROVED')", nativeQuery = true)
+    boolean hasApprovedPayment(@Param("id") Long id);
+
     List<Registration> findByActivityIdAndStatusIn(Long activityId, Collection<RegistrationStatus> statuses);
 
     /** Contagem de inscrições por atividade e status para o relatório gerencial (RF11). */
