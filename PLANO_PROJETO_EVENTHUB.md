@@ -568,12 +568,12 @@ A tabela abaixo consolida quais **Requisitos Funcionais (RF)**, **Regras de Neg�
 
 ## 7. Registro de Decisões Arquiteturais (ADRs Resumidas para o Relatório)
 
-Para apoiar a entrega da Parte I do trabalho, o projeto consolida 4 ADRs fundamentais:
+Para apoiar a entrega da Parte I do trabalho, o projeto consolida 5 ADRs fundamentais:
 
-1. **ADR-01 — Uso de API Gateway (Nginx) e Comunicação REST Síncrona com Degradação Graciosa**:
-   - *Contexto*: Necessidade de integrar 6 microsserviços em Java e Python com uma aplicação Web mantendo baixa complexidade operacional.
-   - *Decisão*: Adotar Nginx como API Gateway e chamadas REST síncronas orquestradas pelo `registration-service`, usando *timeouts* curtos + *try/catch fallback* para o `notification-service`.
-   - *Consequências*: Elimina a complexidade de operar Message Brokers (RabbitMQ/Kafka), garantindo que falhas em notificações não afetem inscrições (RN05).
+1. **ADR-01 — Uso de API Gateway (Nginx) e Comunicação REST Síncrona Inicial**:
+   - *Contexto*: Necessidade de integrar 6 microsserviços em Java e Python com uma aplicação Web mantendo baixa complexidade operacional e ponto único de borda.
+   - *Decisão*: Adotar Nginx como API Gateway na porta 8080 (servindo a SPA e roteando `/api/*`) e chamadas REST com fallback nos serviços. (Evoluída pela ADR-05 para comunicação híbrida Leste–Oeste).
+   - *Consequências*: Elimina problemas de CORS na Web App, isola a rede interna do Docker e provê roteamento transparente.
 2. **ADR-02 — Banco de Dados PostgreSQL Único com Propriedade Lógica por Serviço**:
    - *Contexto*: O requisito do projeto define um banco PostgreSQL único compartilhado entre os containers.
    - *Decisão*: Utilizar uma única instância PostgreSQL (`eventhub_db`) com segregação lógica de tabelas por microsserviço e controle transacional ACID.
@@ -586,3 +586,7 @@ Para apoiar a entrega da Parte I do trabalho, o projeto consolida 4 ADRs fundame
    - *Contexto*: Exigência de interoperabilidade entre tecnologias distintas (RQ05).
    - *Decisão*: Implementar os serviços transacionais de domínio central (`user-service`, `event-service`, `registration-service`) em Java/Spring Boot e os serviços de consulta rápida, gateway externo simulado e notificações (`search-service`, `payment-service`, `notification-service`) em Python/FastAPI.
    - *Consequências*: Combina a robustez transacional do ecossistema Spring com a leveza e produtividade do FastAPI, comunicando-se via contratos JSON/REST explícitos.
+5. **ADR-05 — Comunicação Híbrida Leste–Oeste com Publish/Subscribe Assíncrono (RabbitMQ + DLQ) e Circuit Breaker Formal (Resilience4j + PyBreaker)**:
+   - *Contexto*: Eliminar riscos de perda de dados em falhas prolongadas de notificação (RN05), evitar retenção de locks transacionais e prevenir falhas em cascata sob alta concorrência (RN01, RQ01, RQ03).
+   - *Decisão*: Adotar RabbitMQ com TopicExchange (`eventhub.domain.events`) e Dead Letter Queue (`eventhub.notifications.dlq`) para eventos assíncronos desacoplados via `AFTER_COMMIT`, combinados com Circuit Breakers formais (Resilience4j no Java e PyBreaker no Python) e operação Dual-Mode (Broker-First com fallback HTTP).
+   - *Consequências*: Garante zero message loss com retenção auditável em DLQ, reduz a contenção de lock no banco para milissegundos e fornece fail-fast determinístico sem bloquear operações essenciais.
