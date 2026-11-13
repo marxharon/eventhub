@@ -60,21 +60,49 @@ Para compilar e executar todo o ecossistema localmente, você precisa **apenas**
 
 ---
 
-## 3. Instalação, Compilação e Execução
+## 3. Quick Start — Iniciando o Projeto
 
-### 3.1. Clonar o Repositório
+### ⚡ Inicialização Rápida com Scripts Automatizados
+
+Para simplificar a inicialização, o projeto fornece **scripts de automação multiplataforma** que validam dependências, constroem imagens e monitoram health checks:
+
+#### Windows (PowerShell)
+```powershell
+.\start-eventhub.ps1
+```
+
+#### Linux / macOS (Bash)
+```bash
+./start-eventhub.sh
+```
+
+Os scripts irão:
+- ✅ Validar instalação do Docker e Docker Compose
+- ✅ Compilar e iniciar todos os 6 microsserviços + infraestrutura
+- ✅ Aguardar health checks de cada container (até 180s)
+- ✅ Exibir URLs de acesso e credenciais iniciais
+
+**Para documentação detalhada, veja [START_GUIDE.md](START_GUIDE.md) e [STARTUP_SUMMARY.md](STARTUP_SUMMARY.md).**
+
+---
+
+## 4. Instalação Manual, Compilação e Execução
+
+Se preferir não usar os scripts automatizados, siga os passos abaixo:
+
+### 4.1. Clonar o Repositório
 ```bash
 git clone https://github.com/marxharon/eventhub.git
 cd eventhub
 ```
 
-### 3.2. Configurar Variáveis de Ambiente (Opcional)
+### 4.2. Configurar Variáveis de Ambiente (Opcional)
 O projeto já possui valores padrão configurados no `docker-compose.yml`, mas você pode criar um arquivo `.env` a partir do modelo fornecido:
 ```bash
 cp .env.example .env
 ```
 
-### 3.3. Compilar as Imagens e Iniciar os Containers
+### 4.3. Compilar as Imagens e Iniciar os Containers
 Execute o comando abaixo na raiz do projeto para compilar os serviços Java/Python e subir toda a infraestrutura em segundo plano:
 ```bash
 docker compose up -d --build
@@ -87,7 +115,7 @@ docker compose ps
 
 ---
 
-## 4. Acesso à Aplicação Web, Documentação Swagger e Credenciais Iniciais
+## 5. Acesso à Aplicação Web, Documentação Swagger e Credenciais Iniciais
 
 Com os containers em execução, acesse no navegador:
 
@@ -159,7 +187,7 @@ A aplicação inicia na **Tela de Login**. Utilize uma das contas abaixo (detalh
 
 ---
 
-## 5. Documentação Arquitetural no Repositório
+## 6. Documentação Arquitetural no Repositório
 
 - **[PLANO_PROJETO_EVENTHUB.md](PLANO_PROJETO_EVENTHUB.md)**: Plano completo do projeto, matriz de rastreabilidade (`RF`, `RN`, `RQ`) e roteiro de implementação incremental em 10 *baby steps* autocontidos.
 - **[plano_atualizacao_arquitetura.md](plano_atualizacao_arquitetura.md)**: Plano incremental em 8 *baby steps* executado para adicionar **Publish/Subscribe Assíncrono (RabbitMQ + DLQ)** e **Circuit Breaker Formal (Resilience4j + PyBreaker/Tenacity)** sem quebrar contratos existentes.
@@ -170,7 +198,7 @@ A aplicação inicia na **Tela de Login**. Utilize uma das contas abaixo (detalh
 
 ---
 
-## 6. Comandos Úteis de Operação
+## 7. Comandos Úteis de Operação
 
 - **Visualizar logs de um microsserviço específico**:
   ```bash
@@ -190,7 +218,7 @@ A aplicação inicia na **Tela de Login**. Utilize uma das contas abaixo (detalh
 
 ---
 
-## 7. Aplicação Web (SPA) e Chaos Lab
+## 8. Aplicação Web (SPA) e Chaos Lab
 
 A SPA em `http://localhost:8080` organiza as telas por perfil:
 
