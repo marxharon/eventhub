@@ -3,6 +3,7 @@
 O **EventHub** é uma plataforma web acadêmica e profissional para gerenciamento de eventos (congressos, seminários, workshops e minicursos), projetada e implementada sobre uma **arquitetura de microsserviços poliglota** (**Java 21 / Spring Boot 3** e **Python 3.12 / FastAPI**), utilizando um **API Gateway (Nginx)**, **Mensageria Assíncrona Publish/Subscribe (RabbitMQ + Dead Letter Queue)**, **Circuit Breaker Formal (Resilience4j e PyBreaker + Tenacity)** e persistência relacional em instância única do **PostgreSQL 16** totalmente conteinerizada via **Docker Compose**.
 
 Relatório do projeto: [Relatório EventHub](./relatorio_eventhub.pdf)
+Apresentação do projeto: [Apresentação EventHub](./apresentacao_eventhub.pdf)
 
 ---
 
